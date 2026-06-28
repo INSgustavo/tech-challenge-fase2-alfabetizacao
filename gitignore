@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+# dados locais de amostra (subir no DBFS, não versionar pesados)
+data/*.csv
+data/*.parquet
+*.delta/

@@ -1,0 +1,5 @@
+# Executado majoritariamente no Databricks (PySpark já incluso no cluster)
+basedosdados        # extração das fontes (opcional, fora do Databricks)
+pymongo             # serving MongoDB
+mlflow              # tracking de modelos (já vem no Databricks ML runtime)
+scikit-learn        # modelo de IA
