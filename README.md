@@ -6,7 +6,7 @@ Pipeline Lakehouse para integrar dados educacionais em **batch e streaming**, ap
 > Plataforma principal: Databricks Free Edition · PySpark · Delta Lake
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="Arquitetura do pipeline" width="100%">
+  <img src="docs/architecture.png" alt="Arquitetura do pipeline" width="100%">
 </p>
 
 ## O que este projeto entrega
