@@ -57,7 +57,7 @@ stream = (
     .schema(SCHEMA)
     .json(LANDING)
     .withColumn("_ingestion_timestamp", F.current_timestamp())
-    .withColumn("_source_file", F.input_file_name())
+    .withColumn("_source_file", F.col("_metadata.file_path"))
     .withColumn("_payload_hash", F.sha2(F.to_json(F.struct("*")), 256))
 )
 
