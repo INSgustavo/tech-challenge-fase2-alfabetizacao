@@ -1,57 +1,74 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 02 — Bronze Streaming (P3) — SIMULAÇÃO
-# MAGIC Producer grava eventos na landing zone (Unity Catalog Volume).
-# MAGIC Structured Streaming lê e faz append no Bronze Delta.
-# MAGIC (Mesma API leria de Kafka em produção: `.format("kafka")`.)
+# MAGIC # 02 — Bronze Streaming
+# MAGIC Simula um producer em JSON e processa os eventos com Structured Streaming.
 
 # COMMAND ----------
 CATALOG = "workspace"
-LANDING  = f"/Volumes/{CATALOG}/bronze/streaming_landing"
-CHK_PATH = f"/Volumes/{CATALOG}/bronze/streaming_landing/_checkpoints"
+LANDING = f"/Volumes/{CATALOG}/bronze/streaming_landing/"
+CHECKPOINT = f"/Volumes/{CATALOG}/observability/checkpoints/bronze_streaming/"
+TARGET = f"{CATALOG}.bronze.eventos_streaming"
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## Producer — simula novas medições
-
-# COMMAND ----------
-import json, random
-from datetime import datetime
+import json
+import uuid
+from datetime import datetime, timezone
 from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    DoubleType, IntegerType, StringType, StructField, StructType, TimestampType
+)
 
-# TODO (P3): gerar N eventos e salvar como JSON na LANDING
-# Exemplo de evento:
-evento_exemplo = {
-    "ano": 2024,
+SCHEMA = StructType([
+    StructField("event_id", StringType(), False),
+    StructField("event_time", TimestampType(), False),
+    StructField("schema_version", StringType(), False),
+    StructField("ano", IntegerType(), False),
+    StructField("sigla_uf", StringType(), False),
+    StructField("id_municipio", StringType(), False),
+    StructField("rede", IntegerType(), False),
+    StructField("taxa_alfabetizacao", DoubleType(), False),
+    StructField("source", StringType(), False),
+])
+
+# COMMAND ----------
+# Producer de demonstração. Em produção, substituir por Kafka/Event Hubs.
+evento = {
+    "event_id": str(uuid.uuid4()),
+    "event_time": datetime.now(timezone.utc).isoformat(),
+    "schema_version": "1.0",
+    "ano": 2025,
     "sigla_uf": "SP",
     "id_municipio": "3550308",
-    "taxa_alfabetizacao": round(random.uniform(0.70, 0.99), 4),
-    "ts": datetime.utcnow().isoformat()
+    "rede": 3,
+    "taxa_alfabetizacao": 0.8125,
+    "source": "simulador_medicoes",
 }
-print("Exemplo de evento:", json.dumps(evento_exemplo, indent=2))
-print(f"Landing zone: {LANDING}")
+
+dbutils.fs.put(
+    f"{LANDING}event-{evento['event_id']}.json",
+    json.dumps(evento),
+    overwrite=False,
+)
+print(json.dumps(evento, indent=2, ensure_ascii=False))
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## Consumer — Structured Streaming → Bronze Delta
+stream = (
+    spark.readStream
+    .schema(SCHEMA)
+    .json(LANDING)
+    .withColumn("_ingestion_timestamp", F.current_timestamp())
+    .withColumn("_source_file", F.input_file_name())
+    .withColumn("_payload_hash", F.sha2(F.to_json(F.struct("*")), 256))
+)
 
-# COMMAND ----------
-from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
-
-schema = (StructType()
-    .add("ano", IntegerType())
-    .add("sigla_uf", StringType())
-    .add("id_municipio", StringType())
-    .add("taxa_alfabetizacao", DoubleType())
-    .add("ts", StringType()))
-
-stream = (spark.readStream
-    .schema(schema)
-    .json(LANDING))
-
-# TODO (P3): adicionar métricas (foreachBatch) antes de escrever
-(stream.writeStream
+query = (
+    stream.writeStream
     .format("delta")
     .outputMode("append")
-    .option("checkpointLocation", CHK_PATH)
-    .toTable(f"{CATALOG}.bronze.eventos_streaming"))
+    .option("checkpointLocation", CHECKPOINT)
+    .trigger(availableNow=True)
+    .toTable(TARGET)
+)
+
+query.awaitTermination()
+print(f"Eventos processados em {TARGET}")

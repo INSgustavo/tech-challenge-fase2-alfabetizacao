@@ -1,190 +1,132 @@
-<svg width="1480" height="960" viewBox="0 0 1480 960" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif">
+<svg viewBox="0 0 870 490" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Arial, sans-serif" font-size="12" style="">
+  <title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto">Pipeline Híbrida — Indicador Criança Alfabetizada</title>
+
+  
+  <rect width="860" height="480" fill="#ffffff" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  
+  <text x="430" y="30" text-anchor="middle" fill="#1a1a1a" font-size="14" font-weight="bold" style="fill:rgb(26, 26, 26);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:14px;font-weight:700;text-anchor:middle;dominant-baseline:auto">Pipeline Híbrida — Indicador Criança Alfabetizada</text>
+  <text x="430" y="48" text-anchor="middle" fill="#666" font-size="10" style="fill:rgb(102, 102, 102);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">Databricks Free Edition · PySpark + Delta Lake · Arquitetura Medalhão</text>
+
+  
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,3 L0,6 Z" fill="#ED0973"/>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#999"/>
     </marker>
-    <linearGradient id="medal" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#7A2150"/>
-      <stop offset="0.5" stop-color="#BE185D"/>
-      <stop offset="1" stop-color="#ED0973"/>
-    </linearGradient>
-  </defs>
+    <marker id="ab" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#bbb"/>
+    </marker>
+  <mask id="imagine-text-gaps-8lt0fs" maskUnits="userSpaceOnUse"><rect x="0" y="0" width="870" height="490" fill="white"/><rect x="260.2083435058594" y="14.996728897094727" width="340.0673522949219" height="20.54961585998535" fill="black" rx="2"/><rect x="269.28662109375" y="36.54307556152344" width="321.77020263671875" height="15.821154594421387" fill="black" rx="2"/><rect x="29.74962615966797" y="69.72518920898438" width="50.57675552368164" height="14.639039039611816" fill="black" rx="2"/><rect x="27.680923461914062" y="91.54307556152344" width="55.057884216308594" height="15.821154594421387" fill="black" rx="2"/><rect x="25.529102325439453" y="107.90731048583984" width="59.65656661987305" height="13.456923484802246" fill="black" rx="2"/><rect x="16.580120086669922" y="139.54307556152344" width="76.83975219726562" height="15.821145057678223" fill="black" rx="2"/><rect x="18.27017593383789" y="155.9073028564453" width="72.54435729980469" height="13.456923484802246" fill="black" rx="2"/><rect x="192.7825164794922" y="92.54308319091797" width="54.43497085571289" height="15.821154594421387" fill="black" rx="2"/><rect x="178.3108367919922" y="119.72518920898438" width="83.09331512451172" height="14.639039039611816" fill="black" rx="2"/><rect x="161.73350524902344" y="141.72518920898438" width="117.42466735839844" height="14.639039039611816" fill="black" rx="2"/><rect x="156.07228088378906" y="169.72518920898438" width="128.4372787475586" height="14.639039039611816" fill="black" rx="2"/><rect x="169.14019775390625" y="192.9073028564453" width="101.99215698242188" height="13.456923484802246" fill="black" rx="2"/><rect x="386.5505065917969" y="92.54308319091797" width="47.22665786743164" height="15.821154594421387" fill="black" rx="2"/><rect x="371.5708923339844" y="119.72518920898438" width="77.4044418334961" height="14.639039039611816" fill="black" rx="2"/><rect x="352.3707580566406" y="141.72518920898438" width="115.47383880615234" height="14.639039039611816" fill="black" rx="2"/><rect x="359.58349609375" y="166.72518920898438" width="100.55352783203125" height="14.639039039611816" fill="black" rx="2"/><rect x="364.90301513671875" y="192.9073028564453" width="90.91853332519531" height="12.274807929992676" fill="black" rx="2"/><rect x="580.1152954101562" y="92.54308319091797" width="40.092586517333984" height="15.821154594421387" fill="black" rx="2"/><rect x="563.5564575195312" y="119.72518920898438" width="72.59520721435547" height="14.639039039611816" fill="black" rx="2"/><rect x="542.7493896484375" y="141.72518920898438" width="114.73151397705078" height="14.639039039611816" fill="black" rx="2"/><rect x="549.4911499023438" y="166.72518920898438" width="101.91468811035156" height="14.639039039611816" fill="black" rx="2"/><rect x="532.43359375" y="192.9073028564453" width="136.44956970214844" height="13.456923484802246" fill="black" rx="2"/><rect x="552.0585327148438" y="256.5430603027344" width="96.22596740722656" height="15.821154594421387" fill="black" rx="2"/><rect x="547.8010864257812" y="272.90728759765625" width="104.67668151855469" height="13.456923484802246" fill="black" rx="2"/><rect x="571.8589477539062" y="302.5430603027344" width="56.78628921508789" height="15.821154594421387" fill="black" rx="2"/><rect x="556.5745849609375" y="318.90728759765625" width="87.12200927734375" height="13.456923484802246" fill="black" rx="2"/><rect x="263.90380859375" y="260.5430908203125" width="112.5310287475586" height="15.821154594421387" fill="black" rx="2"/><rect x="214.9937744140625" y="277.7251892089844" width="210.91941833496094" height="14.639039039611816" fill="black" rx="2"/><rect x="233.75985717773438" y="291.9073181152344" width="172.0154571533203" height="13.456923484802246" fill="black" rx="2"/><rect x="206.30116271972656" y="324.5430908203125" width="47.89967727661133" height="15.821154594421387" fill="black" rx="2"/><rect x="174.6241455078125" y="340.9073181152344" width="109.8504409790039" height="13.456923484802246" fill="black" rx="2"/><rect x="183.13906860351562" y="352.90728759765625" width="94.44982147216797" height="12.274807929992676" fill="black" rx="2"/><rect x="369.64996337890625" y="324.5430908203125" width="80.7000961303711" height="15.821154594421387" fill="black" rx="2"/><rect x="373.1224365234375" y="340.9073181152344" width="75.07311248779297" height="13.456923484802246" fill="black" rx="2"/><rect x="359.27874755859375" y="352.90728759765625" width="100.98138427734375" height="13.456923484802246" fill="black" rx="2"/><rect x="182.96359252929688" y="385.5430603027344" width="94.41158294677734" height="15.821154594421387" fill="black" rx="2"/><rect x="177.50555419921875" y="401.9073181152344" width="104.52429962158203" height="13.456923484802246" fill="black" rx="2"/><rect x="373.251708984375" y="385.5430603027344" width="73.49658203125" height="15.821154594421387" fill="black" rx="2"/><rect x="350.5052185058594" y="401.9073181152344" width="118.54002380371094" height="12.274807929992676" fill="black" rx="2"/><rect x="699.81787109375" y="383.7251892089844" width="64.55084609985352" height="14.639039039611816" fill="black" rx="2"/><rect x="700.9999389648438" y="401.7251892089844" width="48.91018295288086" height="14.639039039611816" fill="black" rx="2"/></mask></defs>
 
-  <rect x="0" y="0" width="1480" height="960" fill="#0B0B0F"/>
+  
+  <text x="55" y="80" text-anchor="middle" fill="#999" font-size="9" font-weight="bold" letter-spacing="1" style="fill:rgb(153, 153, 153);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:auto">FONTES</text>
 
-  <text x="40" y="48" font-size="20" font-weight="bold" fill="#FFFFFF">FIAP<tspan fill="#ED0973">  PÓS TECH</tspan></text>
-  <text x="40" y="82" font-size="28" font-weight="bold" fill="#FFFFFF">Pipeline Híbrida — Indicador Criança Alfabetizada</text>
-  <text x="40" y="108" font-size="14" fill="#B8B8C4">Lakehouse · Arquitetura Medalhão (Bronze · Silver · Gold) · Databricks Free + PySpark + Delta Lake</text>
-  <rect x="40" y="119" width="120" height="3" fill="#ED0973"/>
+  <rect x="10" y="88" width="90" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="55" y="103" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">CSV INEP</text>
+  <text x="55" y="117" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">batch · .csv.gz</text>
 
-  <!-- Databricks platform container -->
-  <rect x="250" y="150" width="940" height="340" rx="14" fill="none" stroke="#3A3A44" stroke-width="1.4" stroke-dasharray="6 5"/>
-  <rect x="262" y="139" width="300" height="22" rx="11" fill="#ED0973"/>
-  <text x="276" y="155" font-size="12.5" font-weight="bold" fill="#0B0B0F">DATABRICKS FREE · DBFS · DELTA LAKE</text>
+  <rect x="10" y="136" width="90" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="55" y="151" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">Eventos JSON</text>
+  <text x="55" y="165" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">streaming landing</text>
 
-  <!-- ===================== SOURCES ===================== -->
-  <text x="70" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">FONTES</text>
-  <rect x="40" y="190" width="170" height="72" rx="10" fill="#16161D" stroke="#3A3A44" stroke-width="1.5"/>
-  <text x="125" y="219" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Base dos Dados</text>
-  <text x="125" y="239" font-size="12" fill="#B8B8C4" text-anchor="middle">INEP · ICA</text>
-  <text x="125" y="255" font-size="12" fill="#B8B8C4" text-anchor="middle">6 entidades</text>
+  
+  <line x1="100" y1="106" x2="148" y2="130" stroke="#bbb" stroke-width="1.2" marker-end="url(#ab)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1.2px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="100" y1="154" x2="148" y2="154" stroke="#bbb" stroke-width="1.2" marker-end="url(#ab)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1.2px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <rect x="40" y="276" width="170" height="66" rx="10" fill="#16161D" stroke="#3A3A44" stroke-width="1.5"/>
-  <text x="125" y="304" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Enriquecimento</text>
-  <text x="125" y="324" font-size="12" fill="#B8B8C4" text-anchor="middle">Censo Escolar · IBGE</text>
+  
+  <rect x="150" y="88" width="140" height="120" rx="5" fill="#fffbf2" stroke="#d97706" stroke-width="1.5" style="fill:rgb(255, 251, 242);stroke:rgb(217, 119, 6);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="150" y="88" width="140" height="22" rx="5" fill="#d97706" style="fill:rgb(217, 119, 6);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="150" y="100" width="140" height="10" rx="0" fill="#d97706" style="fill:rgb(217, 119, 6);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="220" y="104" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:auto">BRONZE</text>
 
-  <rect x="40" y="366" width="170" height="74" rx="10" fill="#1E1119" stroke="#ED0973" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="125" y="394" font-size="14" font-weight="bold" fill="#F9A8D4" text-anchor="middle">Eventos (sim.)</text>
-  <text x="125" y="414" font-size="12" fill="#F472B6" text-anchor="middle">"novas medições"</text>
-  <text x="125" y="430" font-size="12" fill="#F472B6" text-anchor="middle">producer notebook</text>
+  <text x="220" y="130" text-anchor="middle" fill="#92400e" font-size="9" style="fill:rgb(146, 64, 14);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">workspace.bronze</text>
+  <rect x="162" y="137" width="116" height="22" rx="3" fill="#fef3c7" stroke="#fbbf24" stroke-width="1" style="fill:rgb(254, 243, 199);stroke:rgb(251, 191, 36);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="220" y="152" text-anchor="middle" fill="#78350f" font-size="9" style="fill:rgb(120, 53, 15);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">01 batch — 6 tabelas Delta</text>
+  <rect x="162" y="165" width="116" height="22" rx="3" fill="#fef3c7" stroke="#fbbf24" stroke-width="1" style="fill:rgb(254, 243, 199);stroke:rgb(251, 191, 36);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="220" y="180" text-anchor="middle" fill="#78350f" font-size="9" style="fill:rgb(120, 53, 15);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">02 streaming — AvailableNow</text>
+  <text x="220" y="202" text-anchor="middle" fill="#b45309" font-size="8" style="fill:rgb(180, 83, 9);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">bruto · sem transformação</text>
 
-  <!-- ===================== INGESTION ===================== -->
-  <text x="290" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">INGESTÃO</text>
-  <rect x="265" y="200" width="195" height="84" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="2"/>
-  <text x="362" y="229" font-size="15" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Batch · PySpark</text>
-  <text x="362" y="251" font-size="12" fill="#B8B8C4" text-anchor="middle">read CSV / basedosdados</text>
-  <text x="362" y="268" font-size="12" fill="#B8B8C4" text-anchor="middle">→ Bronze Delta</text>
+  
+  <line x1="290" y1="148" x2="338" y2="148" stroke="#999" stroke-width="1.5" marker-end="url(#a)" style="fill:rgb(0, 0, 0);stroke:rgb(153, 153, 153);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <rect x="265" y="350" width="195" height="92" rx="10" fill="#1E1119" stroke="#ED0973" stroke-width="2" stroke-dasharray="5 4"/>
-  <text x="362" y="377" font-size="14.5" font-weight="bold" fill="#F9A8D4" text-anchor="middle">Structured Streaming</text>
-  <text x="362" y="398" font-size="12" fill="#F472B6" text-anchor="middle">readStream (simula Kafka)</text>
-  <text x="362" y="415" font-size="12" fill="#F472B6" text-anchor="middle">→ Bronze Delta</text>
+  
+  <rect x="340" y="88" width="140" height="120" rx="5" fill="#f2faf2" stroke="#16a34a" stroke-width="1.5" style="fill:rgb(242, 250, 242);stroke:rgb(22, 163, 74);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="340" y="88" width="140" height="22" rx="5" fill="#16a34a" style="fill:rgb(22, 163, 74);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="340" y="100" width="140" height="10" rx="0" fill="#16a34a" style="fill:rgb(22, 163, 74);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="410" y="104" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:auto">SILVER</text>
 
-  <line x1="210" y1="226" x2="263" y2="240" stroke="#ED0973" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <line x1="210" y1="309" x2="263" y2="260" stroke="#ED0973" stroke-width="1.8" marker-end="url(#arrow)"/>
-  <line x1="210" y1="403" x2="263" y2="398" stroke="#ED0973" stroke-width="1.8" marker-end="url(#arrow)"/>
+  <text x="410" y="130" text-anchor="middle" fill="#166534" font-size="9" style="fill:rgb(22, 101, 52);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">workspace.silver</text>
+  <rect x="352" y="137" width="116" height="22" rx="3" fill="#dcfce7" stroke="#86efac" stroke-width="1" style="fill:rgb(220, 252, 231);stroke:rgb(134, 239, 172);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="410" y="152" text-anchor="middle" fill="#15803d" font-size="9" style="fill:rgb(21, 128, 61);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">03 silver — limpeza + joins</text>
+  <rect x="352" y="165" width="116" height="22" rx="3" fill="#dcfce7" stroke="#86efac" stroke-width="1" style="fill:rgb(220, 252, 231);stroke:rgb(134, 239, 172);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="410" y="177" text-anchor="middle" fill="#15803d" font-size="9" style="fill:rgb(21, 128, 61);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">flag alfabetizado ≥ 743</text>
+  <text x="410" y="202" text-anchor="middle" fill="#16a34a" font-size="8" style="fill:rgb(22, 163, 74);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">modelo canônico · dados validados</text>
 
-  <!-- ===================== MEDALLION ===================== -->
-  <text x="525" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">BRONZE</text>
-  <rect x="495" y="190" width="185" height="285" rx="12" fill="#16161D" stroke="#ED0973" stroke-width="2"/>
-  <rect x="495" y="190" width="185" height="8" rx="4" fill="url(#medal)" opacity="0.55"/>
-  <text x="587" y="224" font-size="15.5" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Raw · Delta</text>
-  <rect x="513" y="238" width="149" height="46" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="587" y="259" font-size="12" fill="#E5E7EB" text-anchor="middle">Zona batch</text>
-  <text x="587" y="275" font-size="11" fill="#9CA3AF" text-anchor="middle">histórico bruto</text>
-  <rect x="513" y="294" width="149" height="46" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="587" y="315" font-size="12" fill="#E5E7EB" text-anchor="middle">Zona streaming</text>
-  <text x="587" y="331" font-size="11" fill="#9CA3AF" text-anchor="middle">eventos brutos</text>
-  <text x="587" y="370" font-size="11" fill="#B8B8C4" text-anchor="middle">Delta · part. ano/uf</text>
-  <text x="587" y="440" font-size="11" font-style="italic" fill="#6B7280" text-anchor="middle">sem transformação</text>
+  
+  <line x1="480" y1="148" x2="528" y2="148" stroke="#999" stroke-width="1.5" marker-end="url(#a)" style="fill:rgb(0, 0, 0);stroke:rgb(153, 153, 153);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <text x="755" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">SILVER</text>
-  <rect x="725" y="190" width="185" height="285" rx="12" fill="#16161D" stroke="#ED0973" stroke-width="2"/>
-  <rect x="725" y="190" width="185" height="8" rx="4" fill="url(#medal)" opacity="0.8"/>
-  <text x="817" y="224" font-size="15.5" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Tratado · PySpark</text>
-  <rect x="743" y="238" width="149" height="38" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="817" y="262" font-size="12" fill="#E5E7EB" text-anchor="middle">Limpeza + nulos</text>
-  <rect x="743" y="284" width="149" height="38" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="817" y="308" font-size="12" fill="#E5E7EB" text-anchor="middle">Padroniz. + tipos</text>
-  <rect x="743" y="330" width="149" height="38" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="817" y="354" font-size="12" fill="#E5E7EB" text-anchor="middle">Integração de bases</text>
-  <rect x="743" y="376" width="149" height="44" rx="7" fill="#0F0F15" stroke="#ED0973"/>
-  <text x="817" y="397" font-size="11.5" fill="#F9A8D4" text-anchor="middle">flag alfabetizado</text>
-  <text x="817" y="412" font-size="10.5" fill="#9CA3AF" text-anchor="middle">media_portugues ≥ 743</text>
+  
+  <rect x="530" y="88" width="140" height="120" rx="5" fill="#fffdf0" stroke="#ca8a04" stroke-width="1.5" style="fill:rgb(255, 253, 240);stroke:rgb(202, 138, 4);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="530" y="88" width="140" height="22" rx="5" fill="#ca8a04" style="fill:rgb(202, 138, 4);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="530" y="100" width="140" height="10" rx="0" fill="#ca8a04" style="fill:rgb(202, 138, 4);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="600" y="104" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" style="fill:rgb(255, 255, 255);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:auto">GOLD</text>
 
-  <text x="985" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">GOLD</text>
-  <rect x="955" y="190" width="185" height="285" rx="12" fill="#16161D" stroke="#ED0973" stroke-width="2"/>
-  <rect x="955" y="190" width="185" height="8" rx="4" fill="#ED0973"/>
-  <text x="1047" y="224" font-size="15.5" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Analítico · Spark SQL</text>
-  <rect x="973" y="238" width="149" height="44" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="1047" y="258" font-size="11.5" fill="#E5E7EB" text-anchor="middle">Indicador por</text>
-  <text x="1047" y="273" font-size="11.5" fill="#E5E7EB" text-anchor="middle">município</text>
-  <rect x="973" y="290" width="149" height="44" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="1047" y="310" font-size="11.5" fill="#E5E7EB" text-anchor="middle">Meta vs.</text>
-  <text x="1047" y="325" font-size="11.5" fill="#E5E7EB" text-anchor="middle">resultado</text>
-  <rect x="973" y="342" width="149" height="44" rx="7" fill="#0F0F15" stroke="#3A3A44"/>
-  <text x="1047" y="362" font-size="11.5" fill="#E5E7EB" text-anchor="middle">Evolução temporal</text>
-  <text x="1047" y="377" font-size="11.5" fill="#E5E7EB" text-anchor="middle">2023 → 2025</text>
-  <text x="1047" y="425" font-size="11" font-style="italic" fill="#6B7280" text-anchor="middle">marts Delta</text>
+  <text x="600" y="130" text-anchor="middle" fill="#854d0e" font-size="9" style="fill:rgb(133, 77, 14);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">workspace.gold</text>
+  <rect x="542" y="137" width="116" height="22" rx="3" fill="#fef9c3" stroke="#fde047" stroke-width="1" style="fill:rgb(254, 249, 195);stroke:rgb(253, 224, 71);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="600" y="152" text-anchor="middle" fill="#713f12" font-size="9" style="fill:rgb(113, 63, 18);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">04 gold — marts analíticos</text>
+  <rect x="542" y="165" width="116" height="22" rx="3" fill="#fef9c3" stroke="#fde047" stroke-width="1" style="fill:rgb(254, 249, 195);stroke:rgb(253, 224, 71);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="600" y="177" text-anchor="middle" fill="#713f12" font-size="9" style="fill:rgb(113, 63, 18);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">indicador por município</text>
+  <text x="600" y="202" text-anchor="middle" fill="#a16207" font-size="8" style="fill:rgb(161, 98, 7);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">Spark SQL · OPTIMIZE · Z-ORDER</text>
 
-  <line x1="460" y1="242" x2="493" y2="270" stroke="#ED0973" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="460" y1="396" x2="493" y2="335" stroke="#ED0973" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="680" y1="330" x2="723" y2="330" stroke="#ED0973" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <line x1="910" y1="330" x2="953" y2="330" stroke="#ED0973" stroke-width="2.5" marker-end="url(#arrow)"/>
+  
+  <line x1="600" y1="208" x2="600" y2="250" stroke="#bbb" stroke-width="1.2" marker-end="url(#ab)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1.2px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <!-- ===================== SERVING + CONSUMO ===================== -->
-  <text x="1230" y="178" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">SERVING &amp; CONSUMO</text>
-  <rect x="1200" y="190" width="240" height="62" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.8"/>
-  <text x="1320" y="214" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">MongoDB (serving)</text>
-  <text x="1320" y="234" font-size="11.5" fill="#B8B8C4" text-anchor="middle">documento por município</text>
+  
+  
+  <rect x="530" y="252" width="140" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="600" y="268" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">05 MongoDB Atlas</text>
+  <text x="600" y="282" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">1 documento por município</text>
 
-  <rect x="1200" y="262" width="240" height="58" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.8"/>
-  <text x="1320" y="285" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">MLflow (IA)</text>
-  <text x="1320" y="305" font-size="11.5" fill="#B8B8C4" text-anchor="middle">predição · clusters</text>
+  
+  <line x1="480" y1="200" x2="480" y2="290" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="480" y1="290" x2="528" y2="290" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ab)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="530" y="298" width="140" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="600" y="314" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">07 MLflow</text>
+  <text x="600" y="328" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">Modelos · métricas no MLflow</text>
 
-  <rect x="1200" y="330" width="240" height="58" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.8"/>
-  <text x="1320" y="353" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Dashboard</text>
-  <text x="1320" y="373" font-size="11.5" fill="#B8B8C4" text-anchor="middle">Spark SQL / BI</text>
+  
+  <rect x="150" y="252" width="340" height="50" rx="5" fill="#f0f4ff" stroke="#4f46e5" stroke-width="1.5" style="fill:rgb(240, 244, 255);stroke:rgb(79, 70, 229);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="320" y="272" text-anchor="middle" fill="#312e81" font-size="10" font-weight="bold" style="fill:rgb(49, 46, 129);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">Databricks Workflows</text>
+  <text x="320" y="288" text-anchor="middle" fill="#4338ca" font-size="9" style="fill:rgb(67, 56, 202);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:middle;dominant-baseline:auto">00 → 01/02 → 03 → 06 → 04 → 05/07 → 08</text>
+  <text x="320" y="301" text-anchor="middle" fill="#6366f1" font-size="8" style="fill:rgb(99, 102, 241);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">Job Clusters · auto-terminate 30 min · FinOps</text>
 
-  <rect x="1200" y="398" width="240" height="58" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.8"/>
-  <text x="1320" y="421" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Políticas públicas</text>
-  <text x="1320" y="441" font-size="11.5" fill="#B8B8C4" text-anchor="middle">desigualdade educ.</text>
+  
+  <rect x="150" y="318" width="160" height="44" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="230" y="336" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">Git Flow</text>
+  <text x="230" y="350" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">feature/* → develop → main</text>
+  <text x="230" y="362" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">Branch Protection · PRs</text>
 
-  <line x1="1140" y1="290" x2="1198" y2="225" stroke="#ED0973" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="1140" y1="320" x2="1198" y2="295" stroke="#ED0973" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="1140" y1="345" x2="1198" y2="360" stroke="#ED0973" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="1320" y1="252" x2="1320" y2="396" stroke="#3A3A44" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <rect x="330" y="318" width="160" height="44" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="410" y="336" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">CONTRACT.md</text>
+  <text x="410" y="350" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">part. ano / sigla_uf</text>
+  <text x="410" y="362" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">snake_case · flag 743 pts</text>
 
-  <!-- ===================== CROSS-CUTTING BAND ===================== -->
-  <rect x="40" y="515" width="1400" height="150" rx="14" fill="#101017" stroke="#2A2A33" stroke-width="1.5"/>
-  <text x="60" y="543" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">CAMADAS TRANSVERSAIS</text>
+  
+  <line x1="220" y1="208" x2="220" y2="252" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <rect x="150" y="380" width="160" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="230" y="397" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">06 Quality Checks</text>
+  <text x="230" y="411" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">duplicatas · nulos · chaves</text>
+  <line x1="220" y1="362" x2="220" y2="380" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ab)" mask="url(#imagine-text-gaps-8lt0fs)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <rect x="60" y="560" width="320" height="86" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <text x="220" y="588" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Orquestração</text>
-  <text x="220" y="610" font-size="12" fill="#B8B8C4" text-anchor="middle">Databricks Workflows (Jobs)</text>
-  <text x="220" y="629" font-size="12" fill="#B8B8C4" text-anchor="middle">Repos (Git)</text>
+  
+  <rect x="330" y="380" width="160" height="36" rx="4" fill="#f8f8f8" stroke="#ccc" stroke-width="1" style="fill:rgb(248, 248, 248);stroke:rgb(204, 204, 204);color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="410" y="397" text-anchor="middle" fill="#333" font-size="10" font-weight="bold" style="fill:rgb(51, 51, 51);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:10px;font-weight:700;text-anchor:middle;dominant-baseline:auto">08 Monitoring</text>
+  <text x="410" y="411" text-anchor="middle" fill="#888" font-size="8" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:8px;font-weight:400;text-anchor:middle;dominant-baseline:auto">VACUUM · Z-ORDER · alertas</text>
+  <line x1="410" y1="362" x2="410" y2="380" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ab)" mask="url(#imagine-text-gaps-8lt0fs)" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
 
-  <rect x="400" y="560" width="320" height="86" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <text x="560" y="588" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Monitoramento</text>
-  <text x="560" y="610" font-size="12" fill="#B8B8C4" text-anchor="middle">job runs · streaming metrics</text>
-  <text x="560" y="629" font-size="12" fill="#B8B8C4" text-anchor="middle">falhas · latência · volume</text>
-
-  <rect x="740" y="560" width="320" height="86" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <text x="900" y="588" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Qualidade &amp; Governança</text>
-  <text x="900" y="610" font-size="12" fill="#B8B8C4" text-anchor="middle">validações PySpark · Delta constraints</text>
-  <text x="900" y="629" font-size="12" fill="#B8B8C4" text-anchor="middle">duplicidade · nulos · chaves</text>
-
-  <rect x="1080" y="560" width="340" height="86" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <text x="1250" y="588" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">FinOps</text>
-  <text x="1250" y="610" font-size="12" fill="#B8B8C4" text-anchor="middle">cluster auto-terminate · Spot</text>
-  <text x="1250" y="629" font-size="12" fill="#B8B8C4" text-anchor="middle">Delta Z-ORDER · particionamento</text>
-
-  <!-- ===================== OWNERSHIP LEGEND ===================== -->
-  <rect x="40" y="700" width="1400" height="220" rx="14" fill="#101017" stroke="#2A2A33" stroke-width="1.5"/>
-  <text x="60" y="728" font-size="14" font-weight="bold" fill="#9CA3AF" letter-spacing="1">RESPONSÁVEIS (4 pessoas)</text>
-
-  <rect x="60" y="743" width="335" height="158" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <circle cx="85" cy="770" r="8" fill="#ED0973"/>
-  <text x="102" y="775" font-size="14" font-weight="bold" fill="#FFFFFF">P1 — Plataforma</text>
-  <text x="78" y="801" font-size="12" fill="#B8B8C4">Workspace Databricks · DBFS</text>
-  <text x="78" y="821" font-size="12" fill="#B8B8C4">Workflows (Jobs) · Repos/Git</text>
-  <text x="78" y="841" font-size="12" fill="#B8B8C4">README · diagrama</text>
-  <text x="78" y="861" font-size="12" fill="#B8B8C4">FinOps (cluster, Spot)</text>
-  <text x="78" y="881" font-size="12" fill="#B8B8C4">Gatekeeper das PRs</text>
-
-  <rect x="408" y="743" width="335" height="158" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <circle cx="433" cy="770" r="8" fill="#F472B6"/>
-  <text x="450" y="775" font-size="14" font-weight="bold" fill="#FFFFFF">P2 — Ingestão Batch</text>
-  <text x="426" y="801" font-size="12" fill="#B8B8C4">6 entidades → Bronze Delta</text>
-  <text x="426" y="821" font-size="12" fill="#B8B8C4">PySpark (read CSV/BD)</text>
-  <text x="426" y="841" font-size="12" fill="#B8B8C4">Dicionário de dados</text>
-  <text x="426" y="861" font-size="12" fill="#B8B8C4">Enriquecimento externo</text>
-  <text x="426" y="881" font-size="12" fill="#B8B8C4">Entrega: 2 tabelas no Dia 2</text>
-
-  <rect x="756" y="743" width="335" height="158" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <circle cx="781" cy="770" r="8" fill="#BE185D"/>
-  <text x="798" y="775" font-size="14" font-weight="bold" fill="#FFFFFF">P3 — Streaming + Obs.</text>
-  <text x="774" y="801" font-size="12" fill="#B8B8C4">producer + Structured Streaming</text>
-  <text x="774" y="821" font-size="12" fill="#B8B8C4">readStream → Bronze Delta</text>
-  <text x="774" y="841" font-size="12" fill="#B8B8C4">monitoramento / alertas</text>
-  <text x="774" y="861" font-size="12" fill="#B8B8C4">métricas de streaming</text>
-
-  <rect x="1104" y="743" width="316" height="158" rx="10" fill="#16161D" stroke="#ED0973" stroke-width="1.6"/>
-  <circle cx="1129" cy="770" r="8" fill="#F9A8D4"/>
-  <text x="1146" y="775" font-size="14" font-weight="bold" fill="#FFFFFF">P4 — Analytics</text>
-  <text x="1122" y="801" font-size="12" fill="#B8B8C4">Silver + Gold (PySpark/SQL)</text>
-  <text x="1122" y="821" font-size="12" fill="#B8B8C4">qualidade + Delta</text>
-  <text x="1122" y="841" font-size="12" fill="#B8B8C4">MongoDB serving</text>
-  <text x="1122" y="861" font-size="12" fill="#B8B8C4">MLflow + dashboard</text>
-  <text x="1122" y="881" font-size="12" fill="#B8B8C4">apresenta o vídeo</text>
+  
+  <line x1="680" y1="390" x2="700" y2="390" stroke="#999" stroke-width="1.5" mask="url(#imagine-text-gaps-8lt0fs)" style="fill:rgb(0, 0, 0);stroke:rgb(153, 153, 153);color:rgb(11, 11, 11);stroke-width:1.5px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="705" y="394" fill="#888" font-size="9" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:start;dominant-baseline:auto">fluxo principal</text>
+  <line x1="680" y1="408" x2="700" y2="408" stroke="#bbb" stroke-width="1" stroke-dasharray="4,3" style="fill:rgb(0, 0, 0);stroke:rgb(187, 187, 187);color:rgb(11, 11, 11);stroke-width:1px;stroke-dasharray:4px, 3px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:12px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <text x="705" y="412" fill="#888" font-size="9" style="fill:rgb(136, 136, 136);stroke:none;color:rgb(11, 11, 11);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:Arial, sans-serif;font-size:9px;font-weight:400;text-anchor:start;dominant-baseline:auto">referência</text>
 </svg>
