@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Databricks / local
+.databricks/
+.env
+*.dbc
+
+# Data and checkpoints
+data/raw/
+data/output/
+checkpoints/
+*.parquet
+*.delta
+
+# Secrets and local configs
+.env.*
+!.env.example
+secrets/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

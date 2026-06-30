@@ -1,36 +1,103 @@
-# TASKS.md — divisão por pessoa (marque conforme avança)
+# TASKS.md — Backlog do time
 
-## 🔵 P1 — Plataforma (Databricks · Workflows · Git · FinOps)
-- [ ] Criar workspace no Databricks Free Edition; configurar cluster Starter com **auto-termination**.
-- [ ] Conectar o repositório via **Databricks Repos** (GitHub) e definir branches main/develop.
-- [ ] Criar a estrutura de pastas DBFS (`/FileStore/alfabetizacao/bronze|silver|gold`).
-- [ ] Definir e manter o `CONTRACT.md` com o grupo.
-- [ ] Montar o **Workflow (Job)** encadeando os notebooks 01→08.
-- [ ] Configurar Git: PR por feature, merge só após revisão.
-- [ ] Escrever a seção **FinOps**: cluster efêmero, auto-terminate, Spot, Z-ORDER, particionamento + custo estimado.
-- [ ] Consolidar o **README** e inserir o diagrama.
+Use os marcadores abaixo como checklist. Cada item concluído deve ter evidência no PR, no notebook ou na documentação.
 
-## 🩷 P2 — Ingestão Batch (PySpark → Bronze Delta)
-- [ ] Mapear as 6 entidades na Base dos Dados e achar os IDs das tabelas.
-- [ ] Subir o CSV de avaliação para o DBFS.
-- [ ] Ler cada fonte com PySpark e gravar **Bronze como Delta**, particionado `ano`/`sigla_uf`.
-- [ ] Garantir Bronze = bruto (sem transformação; só ingestão + histórico).
-- [ ] **Entregar 2 tabelas em Bronze até o Dia 2** (destrava o P4).
-- [ ] Escrever `docs/data_dictionary.md` e confirmar o de-para de `rede`.
-- [ ] (Adicional) Enriquecimento: Censo Escolar / IBGE por município → Bronze.
+## Entregas compartilhadas
 
-## 🌸 P3 — Streaming + Observabilidade
-- [ ] `producer`: notebook que gera eventos de "novas medições" gravando arquivos numa landing.
-- [ ] **Spark Structured Streaming** (`readStream`) lendo a landing → append na zona streaming do Bronze Delta.
-- [ ] Garantir que o evento segue o mesmo contrato do batch (integra na Silver).
-- [ ] Métricas: falhas, latência (evento→Bronze), volume, alertas (via streaming metrics + job logs).
-- [ ] Escrever as seções "Streaming" e "Monitoramento" do README (frisar que é simulação).
+- [ ] Validar a arquitetura e o contrato comum.
+- [ ] Definir o grão correto de cada fonte e tabela Gold.
+- [ ] Executar revisão cruzada entre integrantes.
+- [ ] Rodar o pipeline ponta a ponta com um único `run_id`.
+- [ ] Registrar evidências: prints, queries, métricas e amostras.
+- [ ] Ensaiar o roteiro de demonstração.
+- [ ] Criar tag da versão final.
 
-## 💗 P4 — Analytics (Silver · Gold · Qualidade · Serving · IA)
-- [ ] **Silver** (PySpark): limpeza, tratar nulos de `proporcao_aluno_nivel_X`, padronizar `rede`, normalizar chaves, **integrar as 6 bases**, criar flag `alfabetizado`.
-- [ ] **Gold** (Spark SQL): indicador por município · meta vs. resultado · evolução 2023→2025 (marts Delta).
-- [ ] **Qualidade**: validações PySpark + Delta constraints (duplicidade, nulos, chaves, accepted values).
-- [ ] **Serving**: exportar Gold → **MongoDB** (um documento por município).
-- [ ] (Adicional) **MLflow**: regressão da taxa por município / clustering de vulnerabilidade.
-- [ ] (Adicional) Dashboard sobre a Gold.
-- [ ] Escrever a seção "Aplicação em IA" e **apresentar o vídeo**.
+## P1 — Plataforma, DevOps e governança
+
+### Essencial
+
+- [ ] Configurar Databricks Repos e estratégia `feature/* → develop → main`.
+- [ ] Criar schemas e volumes do Unity Catalog.
+- [ ] Montar o Workflow completo com dependências corretas.
+- [ ] Configurar auto-termination e política de cluster.
+- [ ] Consolidar README, arquitetura e contrato.
+
+### Diferenciais
+
+- [ ] Criar tabela `observability.pipeline_metrics`.
+- [ ] Implementar função de auditoria reutilizável.
+- [ ] Adicionar GitHub Action para validar Python, JSON e Markdown.
+- [ ] Criar runbook de falha, reprocessamento e demo.
+- [ ] Configurar secrets para MongoDB.
+- [ ] Documentar estratégia de custo baseada em métricas reais.
+- [ ] Criar release tag e changelog da entrega.
+
+## P2 — Fontes, profiling e Bronze batch
+
+### Essencial
+
+- [ ] Mapear as entidades e confirmar a fonte oficial.
+- [ ] Completar `docs/data_dictionary.md`.
+- [ ] Implementar schemas explícitos.
+- [ ] Gravar as fontes em Delta com metadados técnicos.
+- [ ] Reconciliar contagem de origem e destino.
+
+### Diferenciais
+
+- [ ] Criar relatório de profiling por fonte.
+- [ ] Registrar hash ou versão do arquivo de origem.
+- [ ] Implementar ingestão incremental ou por partição.
+- [ ] Validar mudança inesperada de schema.
+- [ ] Enriquecer com IBGE ou Censo Escolar.
+- [ ] Criar uma pequena amostra versionável para testes.
+
+## P3 — Streaming, resiliência e observabilidade
+
+### Essencial
+
+- [ ] Implementar producer de eventos JSON.
+- [ ] Implementar consumer Structured Streaming.
+- [ ] Usar schema explícito e checkpoint isolado.
+- [ ] Registrar volume, latência e falhas.
+
+### Diferenciais
+
+- [ ] Incluir `event_id`, `event_time`, `source` e `schema_version`.
+- [ ] Deduplicar por `event_id`.
+- [ ] Criar quarentena para payload inválido.
+- [ ] Calcular atraso entre evento e ingestão.
+- [ ] Criar rotina de replay da quarentena.
+- [ ] Simular evento duplicado, atrasado e com schema inválido.
+- [ ] Definir SLIs, SLOs e alertas do pipeline.
+
+## P4 — Silver, Gold, serving e IA
+
+### Essencial
+
+- [ ] Criar modelo canônico integrando batch e streaming.
+- [ ] Normalizar chaves e domínio de rede.
+- [ ] Implementar marts Gold com grão documentado.
+- [ ] Implementar controles de qualidade.
+- [ ] Publicar dados no MongoDB.
+- [ ] Registrar experimento no MLflow.
+
+### Diferenciais
+
+- [ ] Criar `record_id` determinístico.
+- [ ] Implementar `upsert` no MongoDB em vez de apagar a coleção.
+- [ ] Criar mart de meta versus resultado e evolução temporal.
+- [ ] Comparar baseline com outro modelo.
+- [ ] Criar model card com limitações e riscos.
+- [ ] Implementar dashboard ou notebook executivo.
+- [ ] Adicionar teste de não regressão para indicadores principais.
+
+## Critérios para considerar o projeto pronto
+
+- [ ] README não contém números ou métricas não reproduzidos pelo código.
+- [ ] `gold.indicador_municipio` realmente possui `id_municipio` no grão.
+- [ ] Silver depende das duas entradas: batch e streaming.
+- [ ] Quality Gate executa antes da Gold.
+- [ ] Workflow inclui setup, ingestão, Silver, qualidade, Gold, serving, ML e monitoramento.
+- [ ] Quarentena e auditoria estão demonstráveis.
+- [ ] Não há segredo versionado.
+- [ ] O fluxo completo pode ser explicado em até dez minutos.

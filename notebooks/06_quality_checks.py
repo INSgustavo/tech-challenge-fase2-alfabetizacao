@@ -1,27 +1,30 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 06 — Qualidade de dados (P4)
-# MAGIC Duplicidade, nulos, chaves de relacionamento, consistência.
+# MAGIC # 06 — Quality Gate
+# MAGIC Valida a Silver antes da publicação da Gold.
 
 # COMMAND ----------
 CATALOG = "workspace"
-
 from pyspark.sql import functions as F
 
-s = spark.table(f"{CATALOG}.silver.alfabetizacao")
+s = spark.table(f"{CATALOG}.silver.medicoes_alfabetizacao")
 
-# Duplicidade
-total = s.count()
-dedup = s.dropDuplicates(["ano", "sigla_uf", "rede"]).count()
-assert total == dedup, f"ERRO: {total - dedup} duplicatas em (ano, sigla_uf, rede)"
-print(f"✓ Sem duplicatas: {total:,} linhas")
+# COMMAND ----------
+checks = {
+    "silver_not_empty": s.limit(1).count() == 1,
+    "record_id_not_null": s.filter(F.col("record_id").isNull()).count() == 0,
+    "record_id_unique": s.count() == s.select("record_id").distinct().count(),
+    "uf_format": s.filter(~F.col("sigla_uf").rlike("^[A-Z]{2}$")).count() == 0,
+    "municipio_format": s.filter(~F.col("id_municipio").rlike("^[0-9]{7}$")).count() == 0,
+    "rede_domain": s.filter(~F.col("rede").isin([0, 2, 3, 5])).count() == 0,
+    "taxa_domain": s.filter(F.col("taxa_alfabetizacao").isNotNull() & ~F.col("taxa_alfabetizacao").between(0.0, 1.0)).count() == 0,
+}
 
-# Nulos
-nulos_portugues = s.filter(F.col("media_portugues").isNull()).count()
-print(f"  nulos media_portugues: {nulos_portugues:,}")
+for name, passed in checks.items():
+    print(f"{'✓' if passed else '✗'} {name}")
 
-nulos_alfabetizado = s.filter(F.col("alfabetizado").isNull()).count()
-print(f"  nulos alfabetizado:    {nulos_alfabetizado:,}")
+failed = [name for name, passed in checks.items() if not passed]
+if failed:
+    raise AssertionError(f"Quality Gate reprovado: {', '.join(failed)}")
 
-# TODO (P4): validar accepted_values de rede (0, 2, 3, 5)
-# TODO (P4): integridade id_municipio vs workspace.bronze.municipio
+print("Quality Gate aprovado")
