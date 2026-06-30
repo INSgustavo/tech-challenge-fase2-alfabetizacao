@@ -50,8 +50,13 @@ stream = (spark.readStream
     .json(LANDING))
 
 # TODO (P3): adicionar métricas (foreachBatch) antes de escrever
+# Trigger.AvailableNow: processa todos os dados disponíveis e encerra
+# (equivale a um micro-batch único — compatível com Free Edition / Starter cluster)
+from pyspark.sql.streaming import Trigger
+
 (stream.writeStream
     .format("delta")
     .outputMode("append")
     .option("checkpointLocation", CHK_PATH)
+    .trigger(availableNow=True)
     .toTable(f"{CATALOG}.bronze.eventos_streaming"))
