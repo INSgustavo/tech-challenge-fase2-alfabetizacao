@@ -1,12 +1,105 @@
 {
   "name": "pipeline-alfabetizacao",
   "tasks": [
-    {"task_key": "setup",            "notebook_task": {"notebook_path": "notebooks/00_setup_ambiente"}},
-    {"task_key": "bronze_batch",     "depends_on": [{"task_key": "setup"}],        "notebook_task": {"notebook_path": "notebooks/01_bronze_batch"}},
-    {"task_key": "bronze_streaming", "depends_on": [{"task_key": "setup"}],        "notebook_task": {"notebook_path": "notebooks/02_bronze_streaming"}},
-    {"task_key": "silver",           "depends_on": [{"task_key": "bronze_batch"}], "notebook_task": {"notebook_path": "notebooks/03_silver"}},
-    {"task_key": "gold",             "depends_on": [{"task_key": "silver"}],       "notebook_task": {"notebook_path": "notebooks/04_gold"}},
-    {"task_key": "serving",          "depends_on": [{"task_key": "gold"}],         "notebook_task": {"notebook_path": "notebooks/05_serving_mongodb"}},
-    {"task_key": "quality",          "depends_on": [{"task_key": "silver"}],       "notebook_task": {"notebook_path": "notebooks/06_quality_checks"}}
+    {
+      "task_key": "setup",
+      "notebook_task": {
+        "notebook_path": "notebooks/00_setup_ambiente"
+      }
+    },
+    {
+      "task_key": "bronze_batch",
+      "depends_on": [
+        {
+          "task_key": "setup"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/01_bronze_batch"
+      }
+    },
+    {
+      "task_key": "bronze_streaming",
+      "depends_on": [
+        {
+          "task_key": "setup"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/02_bronze_streaming"
+      }
+    },
+    {
+      "task_key": "silver",
+      "depends_on": [
+        {
+          "task_key": "bronze_batch"
+        },
+        {
+          "task_key": "bronze_streaming"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/03_silver"
+      }
+    },
+    {
+      "task_key": "quality",
+      "depends_on": [
+        {
+          "task_key": "silver"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/06_quality_checks"
+      }
+    },
+    {
+      "task_key": "gold",
+      "depends_on": [
+        {
+          "task_key": "quality"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/04_gold"
+      }
+    },
+    {
+      "task_key": "serving",
+      "depends_on": [
+        {
+          "task_key": "gold"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/05_serving_mongodb"
+      }
+    },
+    {
+      "task_key": "mlflow",
+      "depends_on": [
+        {
+          "task_key": "gold"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/07_ml_mlflow"
+      }
+    },
+    {
+      "task_key": "monitoring",
+      "depends_on": [
+        {
+          "task_key": "serving"
+        },
+        {
+          "task_key": "mlflow"
+        }
+      ],
+      "notebook_task": {
+        "notebook_path": "notebooks/08_monitoring"
+      }
+    }
   ]
 }

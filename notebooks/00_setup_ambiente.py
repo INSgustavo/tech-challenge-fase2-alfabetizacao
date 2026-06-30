@@ -1,28 +1,50 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 00 — Setup do ambiente (P1)
-# MAGIC Valida o ambiente, cria os schemas no Unity Catalog e os volumes para arquivos.
-# MAGIC
-# MAGIC **Catálogo:** workspace | **Schemas:** bronze · silver · gold
+# MAGIC # 00 — Setup do ambiente
+# MAGIC Cria schemas, volumes e estrutura de observabilidade.
 
 # COMMAND ----------
 CATALOG = "workspace"
 
-# Criar schemas no Unity Catalog
-for camada in ["bronze", "silver", "gold"]:
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{camada}")
-    print(f"Schema criado: {CATALOG}.{camada}")
+for schema in ["bronze", "silver", "gold", "observability"]:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{schema}")
+    print(f"Schema disponível: {CATALOG}.{schema}")
 
 # COMMAND ----------
-# Criar volume para arquivos brutos (landing zone do P2 e P3)
-spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.bronze.raw_files")
-spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.bronze.streaming_landing")
-
-print(f"\nVolumes criados em {CATALOG}.bronze")
-print(f"  - raw_files:         /Volumes/{CATALOG}/bronze/raw_files/")
-print(f"  - streaming_landing: /Volumes/{CATALOG}/bronze/streaming_landing/")
+for schema, volume in [
+    ("bronze", "raw_files"),
+    ("bronze", "streaming_landing"),
+    ("observability", "checkpoints"),
+    ("observability", "quarantine"),
+]:
+    spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{schema}.{volume}")
+    print(f"Volume disponível: /Volumes/{CATALOG}/{schema}/{volume}/")
 
 # COMMAND ----------
-# Validação
-print(f"\nAmbiente OK: Spark {spark.version}")
-display(spark.sql(f"SHOW SCHEMAS IN {CATALOG}"))
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {CATALOG}.observability.pipeline_metrics (
+    run_id STRING,
+    task_name STRING,
+    status STRING,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    rows_read BIGINT,
+    rows_written BIGINT,
+    rows_rejected BIGINT,
+    max_event_time TIMESTAMP,
+    schema_version STRING,
+    error_message STRING
+) USING DELTA
+""")
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {CATALOG}.observability.quarantine_records (
+    run_id STRING,
+    task_name STRING,
+    rejection_reason STRING,
+    payload STRING,
+    ingestion_timestamp TIMESTAMP
+) USING DELTA
+""")
+
+print(f"Ambiente validado com Spark {spark.version}")

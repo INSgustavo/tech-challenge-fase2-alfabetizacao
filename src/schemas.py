@@ -1,17 +1,27 @@
-"""Schemas compartilhados (P1/P2/P3)."""
+"""Schemas compartilhados do pipeline."""
+
 from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType, DoubleType
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
 )
 
-# Schema do evento de streaming (02_bronze_streaming)
-SCHEMA_EVENTO_STREAMING = (StructType()
-    .add("ano", IntegerType())
-    .add("sigla_uf", StringType())
-    .add("id_municipio", StringType())
-    .add("taxa_alfabetizacao", DoubleType())
-    .add("ts", StringType()))
+SCHEMA_EVENTO_STREAMING = StructType([
+    StructField("event_id", StringType(), False),
+    StructField("event_time", TimestampType(), False),
+    StructField("schema_version", StringType(), False),
+    StructField("ano", IntegerType(), False),
+    StructField("sigla_uf", StringType(), False),
+    StructField("id_municipio", StringType(), False),
+    StructField("rede", IntegerType(), False),
+    StructField("taxa_alfabetizacao", DoubleType(), False),
+    StructField("source", StringType(), False),
+])
 
-# Schema esperado da avaliação SAEB (P2 confirmar colunas reais)
+# Ajustar após validação do schema real da fonte.
 SCHEMA_AVALIACAO = StructType([
     StructField("ano", IntegerType(), True),
     StructField("sigla_uf", StringType(), True),
