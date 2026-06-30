@@ -17,11 +17,10 @@ VOLUME_RAW = f"/Volumes/{CATALOG}/bronze/raw_files"
 # MAGIC ## 1. Avaliação Alfabetização (SAEB)
 
 # COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
 df_avaliacao = (spark.read
     .option("header", True)
     .option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/avaliacao_alfabetizacao.csv"))
+    .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_uf.csv.gz"))
 
 (df_avaliacao.write.format("delta")
     .mode("overwrite")
@@ -36,77 +35,25 @@ print("✓ avaliacao_alfabetizacao gravada:", df_avaliacao.count(), "linhas")
 # MAGIC ## 2. UF
 
 # COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
-df_uf = (spark.read.option("header", True).option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/uf.csv"))
+# Tabelas de P2 — carregadas quando os arquivos estiverem disponíveis
+arquivos_p2 = {
+    "uf":             (f"{VOLUME_RAW}/uf.csv",             {}),
+    "municipio":      (f"{VOLUME_RAW}/municipio.csv",      {}),
+    "meta_brasil":    (f"{VOLUME_RAW}/meta_brasil.csv",    {}),
+    "meta_uf":        (f"{VOLUME_RAW}/meta_uf.csv",        {"partitionBy": "sigla_uf"}),
+    "meta_municipio": (f"{VOLUME_RAW}/meta_municipio.csv", {"partitionBy": "sigla_uf"}),
+}
 
-(df_uf.write.format("delta").mode("overwrite")
-    .option("overwriteSchema", "true")
-    .saveAsTable(f"{CATALOG}.bronze.uf"))
-
-print("✓ uf gravada:", df_uf.count(), "linhas")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 3. Município
-
-# COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
-df_municipio = (spark.read.option("header", True).option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/municipio.csv"))
-
-(df_municipio.write.format("delta").mode("overwrite")
-    .option("overwriteSchema", "true")
-    .saveAsTable(f"{CATALOG}.bronze.municipio"))
-
-print("✓ municipio gravada:", df_municipio.count(), "linhas")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 4. Meta Brasil
-
-# COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
-df_meta_brasil = (spark.read.option("header", True).option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/meta_brasil.csv"))
-
-(df_meta_brasil.write.format("delta").mode("overwrite")
-    .option("overwriteSchema", "true")
-    .saveAsTable(f"{CATALOG}.bronze.meta_brasil"))
-
-print("✓ meta_brasil gravada:", df_meta_brasil.count(), "linhas")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 5. Meta UF
-
-# COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
-df_meta_uf = (spark.read.option("header", True).option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/meta_uf.csv"))
-
-(df_meta_uf.write.format("delta").mode("overwrite")
-    .option("overwriteSchema", "true")
-    .partitionBy("sigla_uf")
-    .saveAsTable(f"{CATALOG}.bronze.meta_uf"))
-
-print("✓ meta_uf gravada:", df_meta_uf.count(), "linhas")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 6. Meta Município
-
-# COMMAND ----------
-# TODO (P2): confirmar nome do arquivo após upload
-df_meta_municipio = (spark.read.option("header", True).option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/meta_municipio.csv"))
-
-(df_meta_municipio.write.format("delta").mode("overwrite")
-    .option("overwriteSchema", "true")
-    .partitionBy("sigla_uf")
-    .saveAsTable(f"{CATALOG}.bronze.meta_municipio"))
-
-print("✓ meta_municipio gravada:", df_meta_municipio.count(), "linhas")
+for tabela, (path, opts) in arquivos_p2.items():
+    try:
+        df = (spark.read.option("header", True).option("inferSchema", True).csv(path))
+        writer = df.write.format("delta").mode("overwrite").option("overwriteSchema", "true")
+        if "partitionBy" in opts:
+            writer = writer.partitionBy(opts["partitionBy"])
+        writer.saveAsTable(f"{CATALOG}.bronze.{tabela}")
+        print(f"✓ {tabela}: {df.count():,} linhas")
+    except Exception as e:
+        print(f"⚠ {tabela}: arquivo não encontrado — aguardando P2 ({e})")
 
 # COMMAND ----------
 # MAGIC %md
