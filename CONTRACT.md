@@ -21,14 +21,19 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 - tabelas e colunas em `snake_case`, sem acento;
 - identificadores como `string` para preservar zeros à esquerda;
 - timestamps em UTC;
-- percentuais normalizados entre `0` e `1` na Silver;
+- percentuais normalizados entre `0` e `1` na Silver — a fonte batch entrega
+  `taxa_alfabetizacao` em percentual (0–100) e é **dividida por 100** na Silver;
+  o evento de streaming já chega em fração (0–1);
 - nenhuma credencial ou URI com segredo no código;
 - toda tabela gerada deve possuir comentário e responsável identificável no PR.
 
 ## 3. Chaves
 
 - `sigla_uf`: duas letras maiúsculas;
-- `id_municipio`: código IBGE com sete dígitos, armazenado como `string`;
+- `id_municipio`: código IBGE com sete dígitos, armazenado como `string`; **nulo quando a
+  fonte tem grão UF** (caso da avaliação SAEB agregada) — a coluna `grao` (`uf` | `municipio`)
+  identifica o nível territorial;
+- `serie`: série avaliada (a fonte atual cobre apenas o 2º ano);
 - `rede`: código original da fonte;
 - `record_id`: hash determinístico da chave de negócio e da origem;
 - chave analítica mínima: `ano + id_municipio + rede`;
@@ -47,11 +52,16 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 
 > O de-para deve ser validado contra o dicionário da fonte utilizada. Caso a fonte divirja, este contrato deve ser alterado antes da transformação.
 
-### Regra de alfabetização
+### Regra do corte de proficiência (v1.1)
 
-`alfabetizado = media_portugues >= 743`
+O corte oficial de **743 pontos** na escala Saeb é definido **por aluno**. Na fonte agregada,
+`taxa_alfabetizacao` **já é** o Indicador Criança Alfabetizada (percentual de alunos ≥ 743).
+Por isso:
 
-A regra deve permanecer rastreável à referência utilizada pelo grupo. A Silver deve manter `media_portugues` e a versão da regra, por exemplo `alfabetizacao_rule_version = "1.0"`.
+- o indicador oficial do projeto é `taxa_alfabetizacao` (normalizada 0–1 na Silver);
+- `media_atinge_corte = media_portugues >= 743` é apenas um **sinal auxiliar** sobre a média
+  agregada — não deve ser lido como "a UF/rede é alfabetizada";
+- a Silver mantém `media_portugues` e `alfabetizacao_rule_version = "1.1"`.
 
 ## 5. Contrato do streaming
 

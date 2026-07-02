@@ -136,10 +136,13 @@ A Silver representa o modelo canônico do projeto. Nela são realizadas:
 
 - tipagem explícita;
 - normalização de `sigla_uf`, `id_municipio` e `rede`;
-- deduplicação por chave de negócio;
+- **normalização de escala**: taxa em percentual (batch) e em fração (streaming) convergem para 0–1;
+- coluna `grao` (`uf` | `municipio`): a fonte batch SAEB tem grão UF e o streaming, municipal;
+- deduplicação por chave de negócio (vence o `event_time` mais recente);
 - união entre medições batch e streaming;
 - integração com município, UF e metas;
-- criação de `alfabetizado`, conforme regra documentada no `CONTRACT.md`;
+- criação de `media_atinge_corte`, conforme regra documentada no `CONTRACT.md`
+  (o indicador oficial é `taxa_alfabetizacao`, que já expressa o % de alunos ≥ 743);
 - segregação de registros inválidos.
 
 ### Gold
@@ -148,10 +151,14 @@ A Gold contém tabelas prontas para consumo:
 
 | Tabela | Grão | Uso |
 |---|---|---|
-| `gold.indicador_municipio` | ano + município + rede | análise territorial e ranking |
-| `gold.meta_vs_resultado` | ano + município | comparação da taxa observada com a meta |
-| `gold.evolucao_temporal` | município + rede | evolução histórica e tendência |
 | `gold.resumo_uf` | ano + UF + rede | visão executiva e dashboard |
+| `gold.evolucao_temporal` | UF + rede + ano | evolução histórica com variação ano a ano |
+| `gold.indicador_municipio` | ano + município + rede | medições municipais recebidas via streaming |
+| `gold.meta_vs_resultado` | ano + UF + rede | comparação meta × resultado (criada quando as metas forem carregadas) |
+
+> A fonte batch (avaliação SAEB agregada) tem **grão UF**. O grão municipal é alimentado
+> pelo streaming e será enriquecido quando as tabelas de município e metas municipais
+> (Base dos Dados) forem ingeridas pelo P2.
 
 ## Contrato do evento de streaming
 
