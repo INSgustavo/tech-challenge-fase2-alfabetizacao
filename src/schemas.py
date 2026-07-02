@@ -21,12 +21,13 @@ SCHEMA_EVENTO_STREAMING = StructType([
     StructField("source", StringType(), False),
 ])
 
-# Ajustar após validação do schema real da fonte.
+# Schema real da fonte br_inep_avaliacao_alfabetizacao_uf (grão UF — sem id_municipio).
 SCHEMA_AVALIACAO = StructType([
     StructField("ano", IntegerType(), True),
     StructField("sigla_uf", StringType(), True),
-    StructField("id_municipio", StringType(), True),
+    StructField("serie", IntegerType(), True),
     StructField("rede", IntegerType(), True),
+    StructField("taxa_alfabetizacao", DoubleType(), True),  # percentual 0-100 na origem
     StructField("media_portugues", DoubleType(), True),
-    StructField("taxa_alfabetizacao", DoubleType(), True),
+    *[StructField(f"proporcao_aluno_nivel_{i}", DoubleType(), True) for i in range(9)],
 ])
