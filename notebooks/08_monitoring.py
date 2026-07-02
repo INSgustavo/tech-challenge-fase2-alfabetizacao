@@ -18,6 +18,7 @@ tables = [
     f"{CATALOG}.silver.medicoes_alfabetizacao",
     f"{CATALOG}.gold.indicador_municipio",
     f"{CATALOG}.gold.resumo_uf",
+    f"{CATALOG}.gold.evolucao_temporal",
 ]
 
 rows = []
