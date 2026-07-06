@@ -9,33 +9,96 @@
 # MAGIC 3. Suba cada CSV e use o caminho `/Volumes/workspace/bronze/raw_files/nome_arquivo.csv`
 
 # COMMAND ----------
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    IntegerType,
+    DoubleType,
+    StringType
+)
+
+from pyspark.sql.functions import (
+    current_timestamp,
+    input_file_name,
+    lit
+)
+
 CATALOG = "workspace"
 VOLUME_RAW = f"/Volumes/{CATALOG}/bronze/raw_files"
+
+# Schema explícito da Avaliação de Alfabetização
+schema_avaliacao = StructType([
+    StructField("ano", IntegerType(), False),
+    StructField("sigla_uf", StringType(), False),
+    StructField("serie", IntegerType(), False),
+    StructField("rede", IntegerType(), False),
+    StructField("taxa_alfabetizacao", DoubleType(), True),
+    StructField("media_portugues", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_0", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_1", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_2", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_3", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_4", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_5", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_6", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_7", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_8", DoubleType(), True)
+])
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## 1. Avaliação Alfabetização (SAEB)
 
 # COMMAND ----------
-df_avaliacao = (spark.read
-    .option("header", True)
-    .option("inferSchema", True)
-    .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_uf.csv.gz"))
+df_avaliacao = (
+    spark.read
+        .option("header", True)
+        .schema(schema_avaliacao)
+        .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_uf.csv.gz")
+)
 
-(df_avaliacao.write.format("delta")
-    .mode("overwrite")
-    .option("overwriteSchema", "true")
-    .partitionBy("ano", "sigla_uf")
-    .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao"))
+print("Schema aplicado com sucesso:")
 
-print("✓ avaliacao_alfabetizacao gravada:", df_avaliacao.count(), "linhas")
+df_avaliacao = (
+    df_avaliacao
+        .withColumn("ingestion_timestamp", current_timestamp())
+        .withColumn("source_file", input_file_name())
+        .withColumn("schema_version", lit("1.0"))
+)
+
+df_avaliacao.printSchema()
+(
+    df_avaliacao.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .partitionBy("ano", "sigla_uf")
+        .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao")
+)
+
+origem = df_avaliacao.count()
+
+print(f"✓ avaliacao_alfabetizacao gravada: {origem:,} linhas")
+
+destino = spark.table(
+    f"{CATALOG}.bronze.avaliacao_alfabetizacao"
+).count()
+
+print(f"Origem : {origem}")
+print(f"Destino: {destino}")
+
+if origem == destino:
+    print("✓ Reconciliação realizada com sucesso.")
+else:
+    raise Exception(
+        f"Falha na reconciliação: origem={origem}, destino={destino}"
+    )
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 2. UF
+# MAGIC ## 2. Demais fontes (P2)
 
 # COMMAND ----------
-# Tabelas de P2 — carregadas quando os arquivos estiverem disponíveis
 arquivos_p2 = {
     "uf":             (f"{VOLUME_RAW}/uf.csv",             {}),
     "municipio":      (f"{VOLUME_RAW}/municipio.csv",      {}),
@@ -46,12 +109,27 @@ arquivos_p2 = {
 
 for tabela, (path, opts) in arquivos_p2.items():
     try:
-        df = (spark.read.option("header", True).option("inferSchema", True).csv(path))
-        writer = df.write.format("delta").mode("overwrite").option("overwriteSchema", "true")
+        df = (
+            spark.read
+                .option("header", True)
+                .option("inferSchema", True)
+                .csv(path)
+        )
+
+        writer = (
+            df.write
+                .format("delta")
+                .mode("overwrite")
+                .option("overwriteSchema", "true")
+        )
+
         if "partitionBy" in opts:
             writer = writer.partitionBy(opts["partitionBy"])
+
         writer.saveAsTable(f"{CATALOG}.bronze.{tabela}")
+
         print(f"✓ {tabela}: {df.count():,} linhas")
+
     except Exception as e:
         print(f"⚠ {tabela}: arquivo não encontrado — aguardando P2 ({e})")
 
@@ -60,10 +138,18 @@ for tabela, (path, opts) in arquivos_p2.items():
 # MAGIC ## Validação
 
 # COMMAND ----------
-tabelas = ["avaliacao_alfabetizacao", "uf", "municipio", "meta_brasil", "meta_uf", "meta_municipio"]
-for t in tabelas:
+tabelas = [
+    "avaliacao_alfabetizacao",
+    "uf",
+    "municipio",
+    "meta_brasil",
+    "meta_uf",
+    "meta_municipio"
+]
+
+for tabela in tabelas:
     try:
-        n = spark.table(f"{CATALOG}.bronze.{t}").count()
-        print(f"✓ {t}: {n:,} linhas")
+        quantidade = spark.table(f"{CATALOG}.bronze.{tabela}").count()
+        print(f"✓ {tabela}: {quantidade:,} linhas")
     except Exception as e:
-        print(f"✗ {t}: {e}")
+        print(f"✗ {tabela}: {e}")
