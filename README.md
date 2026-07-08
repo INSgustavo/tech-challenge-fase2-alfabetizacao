@@ -369,3 +369,4 @@ Esse roteiro demonstra ingestão, resiliência, qualidade, consumo e governança
 - [Playbook do time](docs/team_playbook.md)
 - [Runbook de execução e demonstração](docs/runbook.md)
 - [Dicionário de dados](docs/data_dictionary.md)
+# Fiap-fase2
