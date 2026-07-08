@@ -17,11 +17,15 @@ from pyspark.sql.types import (
     StringType
 )
 
+import uuid
+
 from pyspark.sql.functions import (
+    col,
     current_timestamp,
-    input_file_name,
     lit
 )
+
+RUN_ID = str(uuid.uuid4())
 
 CATALOG = "workspace"
 VOLUME_RAW = f"/Volumes/{CATALOG}/bronze/raw_files"
@@ -59,10 +63,14 @@ df_avaliacao = (
 
 print("Schema aplicado com sucesso:")
 
+# _metadata.file_path substitui input_file_name(), que não é suportado no
+# compute serverless com Unity Catalog.
 df_avaliacao = (
     df_avaliacao
         .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", input_file_name())
+        .withColumn("source_file", col("_metadata.file_path"))
+        .withColumn("source_system", lit("basedosdados_inep"))
+        .withColumn("pipeline_run_id", lit(RUN_ID))
         .withColumn("schema_version", lit("1.0"))
 )
 
@@ -72,7 +80,8 @@ df_avaliacao.printSchema()
         .format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
-        .partitionBy("ano", "sigla_uf")
+        # FinOps: tabela de ~150 linhas — particionar só criaria overhead de
+        # arquivos pequenos (ver seção FinOps do README).
         .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao")
 )
 
@@ -105,6 +114,7 @@ arquivos_p2 = {
     "meta_brasil":    (f"{VOLUME_RAW}/meta_brasil.csv",    {}),
     "meta_uf":        (f"{VOLUME_RAW}/meta_uf.csv",        {"partitionBy": "sigla_uf"}),
     "meta_municipio": (f"{VOLUME_RAW}/meta_municipio.csv", {"partitionBy": "sigla_uf"}),
+    "alunos":         (f"{VOLUME_RAW}/alunos_simulados.csv.gz", {}),
 }
 
 for tabela, (path, opts) in arquivos_p2.items():
