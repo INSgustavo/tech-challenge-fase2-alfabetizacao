@@ -12,6 +12,12 @@
 # MAGIC A connection string **nunca** vai versionada (contrato, seção 2).
 
 # COMMAND ----------
+# MAGIC %pip install pymongo
+
+# COMMAND ----------
+dbutils.library.restartPython()
+
+# COMMAND ----------
 CATALOG = "workspace"
 SOURCE = f"{CATALOG}.gold.indicador_municipio"
 DATABASE = "alfabetizacao"
