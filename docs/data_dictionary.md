@@ -1,41 +1,54 @@
-# Dicionário de dados
+# Dicionário de Dados
 
-> O responsável por cada fonte deve completar tipo de origem, nulabilidade, domínio e regra de transformação. Não preencher por suposição.
+> Este documento descreve a estrutura da base de dados utilizada no projeto, seus campos, tipos e regras conhecidas até o momento.
 
-## Modelo canônico Silver
+## Modelo Canônico
 
-| coluna | tipo | obrigatório | descrição | origem / regra |
-|---|---|---:|---|---|
-| `record_id` | string | sim | hash determinístico do registro | gerado na Silver |
-| `ano` | int | sim | ano de referência | fonte |
-| `sigla_uf` | string | sim | UF em duas letras | normalizada |
-| `id_municipio` | string | sim | código IBGE com sete dígitos | normalizado |
-| `rede` | int | sim | código da rede de ensino | fonte |
-| `rede_label` | string | sim | rótulo padronizado | de-para do contrato |
-| `media_portugues` | double | não | média na escala da fonte | batch |
-| `taxa_alfabetizacao` | double | não | proporção normalizada entre 0 e 1 | batch ou streaming |
-| `alfabetizado` | boolean | não | aplicação da regra de corte quando possível | regra versionada |
-| `source` | string | sim | sistema ou produtor | metadado |
-| `event_time` | timestamp | não | instante do evento de streaming | streaming |
-| `processed_at` | timestamp | sim | instante de processamento | Silver |
-| `schema_version` | string | sim | versão do contrato | fonte / pipeline |
+| Coluna | Tipo | Obrigatório | Descrição | Origem / Regra |
+|---|---|:---:|---|---|
+| `ano` | int | Sim | Ano de referência da avaliação. | Fonte |
+| `sigla_uf` | string | Sim | Sigla da Unidade da Federação. | Fonte |
+| `serie` | int | Sim | Série avaliada. | Fonte |
+| `rede` | int | Sim | Código da rede de ensino. O significado dos códigos depende de documentação oficial. | Fonte |
+| `taxa_alfabetizacao` | double | Sim | Percentual de estudantes alfabetizados. | Fonte |
+| `media_portugues` | double | Sim | Média de proficiência em Língua Portuguesa. | Fonte |
+| `proporcao_aluno_nivel_0` | double | Não | Proporção de alunos classificados no nível 0 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_1` | double | Não | Proporção de alunos classificados no nível 1 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_2` | double | Não | Proporção de alunos classificados no nível 2 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_3` | double | Não | Proporção de alunos classificados no nível 3 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_4` | double | Não | Proporção de alunos classificados no nível 4 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_5` | double | Não | Proporção de alunos classificados no nível 5 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_6` | double | Não | Proporção de alunos classificados no nível 6 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_7` | double | Não | Proporção de alunos classificados no nível 7 de proficiência. | Fonte |
+| `proporcao_aluno_nivel_8` | double | Não | Proporção de alunos classificados no nível 8 de proficiência. | Fonte |
 
-## Fontes
+---
 
-| entidade | arquivo ou tabela | grão | chave | atualização | responsável | status |
+## Fonte de Dados
+
+| Entidade | Arquivo | Grão | Chave lógica | Atualização | Responsável | Status |
 |---|---|---|---|---|---|---|
-| avaliação de alfabetização | a confirmar | a confirmar | a confirmar | a confirmar | P2 | pendente |
-| UF | a confirmar | UF | `sigla_uf` | a confirmar | P2 | pendente |
-| município | a confirmar | município | `id_municipio` | a confirmar | P2 | pendente |
-| meta Brasil | a confirmar | ano | `ano` | a confirmar | P2 | pendente |
-| meta UF | a confirmar | ano + UF | `ano, sigla_uf` | a confirmar | P2 | pendente |
-| meta município | a confirmar | ano + município | `ano, id_municipio` | a confirmar | P2 | pendente |
+| Avaliação de Alfabetização por UF | `br_inep_avaliacao_alfabetizacao_uf.csv` | Ano + UF + Série + Rede | `ano`, `sigla_uf`, `serie`, `rede` | Batch | INEP | Confirmado |
 
-## Regras que precisam de validação documental
+---
 
-- de-para do campo `rede`;
-- unidade original de `taxa_alfabetizacao`;
-- regra e referência do corte `743`;
-- grão real da tabela de avaliação;
-- cobertura temporal e territorial;
-- tratamento de registros agregados sem município.
+## Regras de Qualidade Identificadas
+
+- A base contém **145 registros**.
+- O período coberto compreende os anos **2023** e **2024**.
+- Não foram encontrados registros duplicados.
+- Não foram identificados valores nulos nas colunas `taxa_alfabetizacao` e `media_portugues`.
+- Os valores de `taxa_alfabetizacao` encontram-se dentro da faixa esperada para percentuais.
+- Os valores de `media_portugues` encontram-se dentro da escala do SAEB.
+- Não existem registros para as UFs **RR (Roraima)** e **DF (Distrito Federal)**.
+- Há inconsistências na quantidade de registros por UF entre os anos analisados, indicando possível diferença de granularidade.
+- O significado dos códigos presentes na coluna `rede` não está documentado na base analisada.
+
+---
+
+## Pendências Documentais
+
+- Confirmar o significado oficial dos códigos da coluna `rede`.
+- Confirmar se a ausência de RR e DF é esperada na fonte oficial.
+- Confirmar o motivo das diferenças na quantidade de registros entre algumas UFs.
+- Validar a documentação oficial das colunas de proporção de alunos por nível de proficiência (`proporcao_aluno_nivel_0` a `proporcao_aluno_nivel_8`).
