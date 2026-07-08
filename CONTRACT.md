@@ -21,7 +21,9 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 - tabelas e colunas em `snake_case`, sem acento;
 - identificadores como `string` para preservar zeros à esquerda;
 - timestamps em UTC;
-- percentuais normalizados entre `0` e `1` na Silver;
+- percentuais normalizados entre `0` e `1` na Silver — a fonte batch entrega
+  `taxa_alfabetizacao` em percentual (0–100) e é **dividida por 100** na Silver;
+  o evento de streaming já chega em fração (0–1);
 - nenhuma credencial ou URI com segredo no código;
 - toda tabela gerada deve possuir comentário e responsável identificável no PR.
 
@@ -29,6 +31,9 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 
 - `sigla_uf`: duas letras maiúsculas;
 - `id_municipio`: código IBGE com sete dígitos, armazenado como `string`;
+  **nulo quando a fonte tem grão UF** (caso da avaliação SAEB agregada) —
+  a coluna `grao` (`uf` | `municipio`) identifica o nível territorial;
+- `serie`: série avaliada (a fonte atual cobre apenas o 2º ano);
 - `rede`: código original da fonte;
 - `record_id`: hash determinístico da chave de negócio e da origem;
 - chave analítica mínima: `ano + id_municipio + rede`;
@@ -50,6 +55,12 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 ### Regra de alfabetização
 
 `alfabetizado = media_portugues >= 743`
+
+> Nota de interpretação: o corte de 743 é definido **por aluno** (Pesquisa
+> Alfabetiza Brasil). Na fonte agregada, `taxa_alfabetizacao` **já é** o
+> Indicador Criança Alfabetizada (% de alunos ≥ 743); a flag `alfabetizado`
+> sobre a média agregada é um sinal auxiliar e não deve ser lida como
+> "a UF é alfabetizada".
 
 A regra deve permanecer rastreável à referência utilizada pelo grupo. A Silver deve manter `media_portugues` e a versão da regra, por exemplo `alfabetizacao_rule_version = "1.0"`.
 
@@ -165,3 +176,12 @@ Campos mínimos:
 - escrita idempotente;
 - experimento reproduzível;
 - limitações documentadas.
+
+
+## Metas derivadas e dados simulados
+
+As tabelas `meta_brasil`, `meta_uf` e `meta_municipio` são **derivadas** por
+interpolação linear do baseline 2023 (média das redes públicas) até 100% em
+2030 — metodologia identificada na coluna `metodologia`. A tabela `alunos` é
+**simulação documentada** (`fonte = SIMULADO`), usada apenas para demonstrar o
+grão de aluno e a aplicação correta do corte 743. Ver `data/raw/README.md`.
