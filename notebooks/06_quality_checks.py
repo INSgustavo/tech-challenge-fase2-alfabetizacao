@@ -48,15 +48,20 @@ print(f"Silver lida: {rows_read:,} registros")
 # MAGIC A primeira regra violada define o `rejection_reason` do registro.
 
 # COMMAND ----------
+# id_municipio é obrigatório apenas no grão municipal (streaming): a fonte
+# batch da avaliação tem grão UF e não traz município (contrato, seção 3).
 rejection_reason = (
     F.when(
-        F.col("ano").isNull() | F.col("sigla_uf").isNull() | F.col("id_municipio").isNull()
+        F.col("ano").isNull() | F.col("sigla_uf").isNull()
         | F.col("rede").isNull() | F.col("record_id").isNull(),
         F.lit("campo_critico_nulo"),
     )
+    .when((F.col("grao") == "municipio") & F.col("id_municipio").isNull(),
+          F.lit("municipio_nulo_no_grao_municipal"))
     .when(~F.col("sigla_uf").rlike("^[A-Z]{2}$") | ~F.col("sigla_uf").isin(UFS_VALIDAS),
           F.lit("sigla_uf_invalida"))
-    .when(~F.col("id_municipio").rlike("^[0-9]{7}$"), F.lit("id_municipio_invalido"))
+    .when(F.col("id_municipio").isNotNull()
+          & ~F.col("id_municipio").rlike("^[0-9]{7}$"), F.lit("id_municipio_invalido"))
     .when(~F.col("rede").isin([0, 2, 3, 5]), F.lit("rede_fora_do_dominio"))
     .when(F.col("taxa_alfabetizacao").isNotNull()
           & ~F.col("taxa_alfabetizacao").between(0.0, 1.0), F.lit("taxa_fora_do_dominio"))

@@ -13,13 +13,19 @@ rede_mapping = F.create_map([F.lit(x) for pair in REDE_MAP.items() for x in pair
 # COMMAND ----------
 batch = spark.table(f"{CATALOG}.bronze.avaliacao_alfabetizacao")
 
+# A fonte batch (avaliação SAEB agregada) tem grão UF — NÃO existe id_municipio
+# no CSV. A coluna `grao` identifica o nível territorial de cada registro.
+# `taxa_alfabetizacao` chega em percentual (0-100) e é normalizada para 0-1
+# (contrato, seção 2); o streaming já chega em fração.
 batch_canonical = (
     batch
     .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
-    .withColumn("id_municipio", F.lpad(F.col("id_municipio").cast("string"), 7, "0"))
+    .withColumn("id_municipio", F.lit(None).cast("string"))
+    .withColumn("grao", F.lit("uf"))
+    .withColumn("serie", F.col("serie").cast("int"))
     .withColumn("rede", F.col("rede").cast("int"))
     .withColumn("rede_label", rede_mapping[F.col("rede")])
-    .withColumn("taxa_alfabetizacao", F.col("taxa_alfabetizacao").cast("double"))
+    .withColumn("taxa_alfabetizacao", F.col("taxa_alfabetizacao").cast("double") / 100.0)
     .withColumn("media_portugues", F.col("media_portugues").cast("double"))
     .withColumn("alfabetizado", F.when(F.col("media_portugues").isNotNull(), F.col("media_portugues") >= 743))
     .withColumn("event_id", F.lit(None).cast("string"))
@@ -35,6 +41,8 @@ if spark.catalog.tableExists(f"{CATALOG}.bronze.eventos_streaming"):
         events
         .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
         .withColumn("id_municipio", F.lpad(F.col("id_municipio").cast("string"), 7, "0"))
+        .withColumn("grao", F.lit("municipio"))
+        .withColumn("serie", F.lit(None).cast("int"))
         .withColumn("rede", F.col("rede").cast("int"))
         .withColumn("rede_label", rede_mapping[F.col("rede")])
         .withColumn("media_portugues", F.lit(None).cast("double"))
@@ -45,7 +53,7 @@ else:
 
 # COMMAND ----------
 columns = [
-    "ano", "sigla_uf", "id_municipio", "rede", "rede_label",
+    "ano", "sigla_uf", "id_municipio", "grao", "serie", "rede", "rede_label",
     "media_portugues", "taxa_alfabetizacao", "alfabetizado",
     "event_id", "event_time", "source", "schema_version",
 ]
@@ -55,7 +63,12 @@ silver = (
     .unionByName(stream_canonical.select(*columns), allowMissingColumns=True)
     .withColumn(
         "record_id",
-        F.sha2(F.concat_ws("|", "ano", "sigla_uf", "id_municipio", "rede", "source", F.coalesce("event_id", F.lit("batch"))), 256),
+        F.sha2(F.concat_ws("|",
+            F.col("ano"), F.col("sigla_uf"),
+            F.coalesce(F.col("id_municipio"), F.lit("uf")),
+            F.coalesce(F.col("serie").cast("string"), F.lit("na")),
+            F.col("rede"), F.col("source"),
+            F.coalesce(F.col("event_id"), F.lit("batch"))), 256),
     )
     .withColumn("processed_at", F.current_timestamp())
     .dropDuplicates(["record_id"])

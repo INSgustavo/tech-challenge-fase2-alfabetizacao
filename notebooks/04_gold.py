@@ -39,6 +39,7 @@ SELECT
     COUNT(*) AS quantidade_registros,
     MAX(processed_at) AS updated_at
 FROM {SOURCE}
+WHERE grao = 'municipio' AND id_municipio IS NOT NULL
 GROUP BY ano, sigla_uf, id_municipio, rede, rede_label
 """)
 
@@ -158,7 +159,9 @@ spark.sql(f"COMMENT ON TABLE {CATALOG}.gold.meta_vs_resultado IS "
 # COMMAND ----------
 from pyspark.sql.window import Window
 
-w = Window.partitionBy("id_municipio", "rede").orderBy("ano")
+# No grão UF (batch) id_municipio é nulo: a janela usa a UF como fallback para
+# não misturar estados na mesma partição.
+w = Window.partitionBy(F.coalesce("id_municipio", "sigla_uf"), "rede").orderBy("ano")
 
 evolucao_temporal = (
     indicador
