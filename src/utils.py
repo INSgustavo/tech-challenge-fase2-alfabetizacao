@@ -3,6 +3,21 @@
 CATALOG = "workspace"
 REDE_MAP = {0: "total", 2: "estadual", 3: "municipal", 5: "privada"}
 
+# Regra de negócio versionada (CONTRACT.md, seção 4).
+ALFABETIZACAO_CORTE = 743
+ALFABETIZACAO_RULE_VERSION = "1.0"
+
+
+def is_alfabetizado(media_portugues) -> bool | None:
+    """Aplica a regra de corte de alfabetização (media_portugues >= 743).
+
+    Retorna None quando a média é desconhecida, para não afirmar algo sobre
+    um registro sem medição (ex.: eventos de streaming sem media_portugues).
+    """
+    if media_portugues is None:
+        return None
+    return float(media_portugues) >= ALFABETIZACAO_CORTE
+
 
 def full_table(schema: str, table: str) -> str:
     """Retorna o nome qualificado de uma tabela."""
