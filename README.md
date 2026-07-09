@@ -100,6 +100,24 @@ flowchart LR
 | MongoDB com `upsert` | Evita apagar toda a coleção a cada execução. |
 | Métricas operacionais em tabela Delta | Permite acompanhar volume, duração, frescor e falhas ao longo do tempo. |
 
+## Decisões arquiteturais (trade-offs)
+
+**Batch vs streaming** — o histórico anual do INEP não justifica streaming; já as
+atualizações de medições precisam de semântica de evento (idempotência, atraso,
+quarentena). Adotamos o híbrido com convergência na Silver: uma única verdade de
+negócio. O custo é manter dois caminhos de ingestão, mitigado pelo contrato comum
+e pelo trigger `AvailableNow`, que dá exactly-once sem cluster 24/7.
+
+**Data lake vs data warehouse** — o lakehouse (Delta) evita duplicar armazenamento:
+os mesmos arquivos servem exploração, SQL e ML. Um warehouse dedicado daria melhor
+concorrência de BI, mas custaria mais e engessaria o acesso do MLflow aos dados.
+No volume deste projeto, Delta + SQL serverless cobre os dois papéis.
+
+**Custo vs performance** — escolhas deliberadas para o volume real (145 a ~39 mil
+linhas): sem particionamento, sem `OPTIMIZE`/`ZORDER` prematuros, `toPandas`
+restrito a coleções minúsculas. As decisões estão documentadas para reavaliação
+quando o volume crescer.
+
 ## Fluxo de execução
 
 | Ordem | Etapa | Entrada | Saída | Responsabilidade |
@@ -326,6 +344,23 @@ Práticas adotadas ou recomendadas:
 - registrar duração e volume para estimar custo por execução;
 - separar ambientes de desenvolvimento e entrega quando disponível.
 
+**Custo real do projeto: R$ 0** — Databricks Free Edition (serverless na AWS),
+MongoDB Atlas M0 e GitHub gratuitos.
+
+**Estimativa de cenário produtivo** (microdados completos, ~10 GB/ano, cargas
+diárias — valores de referência, não cotação):
+
+| Item | Dimensionamento | Estimativa/mês |
+|---|---|---:|
+| Jobs serverless (batch diário ~15 min) | ~8 DBU | ~US$ 55 |
+| Streaming `AvailableNow` horário | ~4 DBU | ~US$ 28 |
+| Armazenamento S3 (~50 GB com histórico) | — | ~US$ 2 |
+| MongoDB Atlas M10 | — | ~US$ 57 |
+| **Total** | | **~US$ 142/mês** |
+
+A mesma arquitetura em cluster dedicado 24/7 custaria >US$ 600/mês — serverless +
+gatilhos agendados reduzem ~75% do custo operacional.
+
 > Valores de custo devem ser apresentados como estimativa de cenário e nunca como preço garantido.
 
 ## Demonstração sugerida
@@ -342,6 +377,12 @@ Uma apresentação forte pode seguir este roteiro:
 8. mostrar as métricas e o `run_id` no monitoramento.
 
 Esse roteiro demonstra ingestão, resiliência, qualidade, consumo e governança em poucos minutos.
+
+## Evidências de execução
+
+> Prints da execução no Databricks Free Edition (adicionar após o run completo):
+> grafo do Workflow verde · quarentena com `rejection_reason` · marts Gold ·
+> experimento no MLflow · documento no MongoDB Atlas. Arquivos em `docs/evidencias/`.
 
 ## Limitações conhecidas
 
