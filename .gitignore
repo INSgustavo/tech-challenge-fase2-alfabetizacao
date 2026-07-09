@@ -11,7 +11,7 @@ venv/
 *.dbc
 
 # Data and checkpoints
-data/raw/
+# Inputs pequenos do pipeline são versionados (data/raw); saídas não.
 data/output/
 checkpoints/
 *.parquet
