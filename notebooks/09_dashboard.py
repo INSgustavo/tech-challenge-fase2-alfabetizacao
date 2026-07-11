@@ -978,7 +978,286 @@ display(action_board)
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 12. Potencial de inteligência artificial
+# MAGIC ## 12. Galeria visual — gráficos renderizados automaticamente
+# MAGIC Os gráficos abaixo são gerados em SVG/HTML na hora, no mesmo estilo da capa —
+# MAGIC **sem nenhuma configuração manual de visualização**. São os frames do vídeo.
+
+# COMMAND ----------
+# Paleta e moldura compartilhadas
+C_BG = "linear-gradient(135deg,#07111f,#101a35)"
+C_TEXT, C_MUTED = "#eef5ff", "#9eb0c7"
+C_CYAN, C_GREEN, C_AMBER, C_RED, C_VIOLET = "#34d7e7", "#2de2a0", "#ffc857", "#ff6b7a", "#8b7cff"
+STATUS_COLORS = {
+    "Na trajetória": C_GREEN, "Atenção": C_AMBER,
+    "Prioridade": C_RED, "Meta indisponível": C_MUTED,
+}
+
+
+def chart_box(title: str, subtitle: str, body: str) -> str:
+    return (
+        f'<div style="background:{C_BG};border:1px solid rgba(255,255,255,.12);'
+        f'border-radius:20px;padding:22px 26px;margin:8px 0;color:{C_TEXT};'
+        f'font-family:Inter,\'Segoe UI\',sans-serif;box-shadow:0 18px 50px rgba(0,0,0,.30)">'
+        f'<div style="font-size:19px;font-weight:800;letter-spacing:-.02em">{title}</div>'
+        f'<div style="font-size:12px;color:{C_MUTED};margin:4px 0 18px">{subtitle}</div>'
+        f'{body}</div>'
+    )
+
+
+def legend(items) -> str:
+    dots = "".join(
+        f'<span style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;'
+        f'font-size:12px;color:{C_MUTED}"><span style="width:10px;height:10px;'
+        f'border-radius:99px;background:{color};display:inline-block"></span>{label}</span>'
+        for label, color in items
+    )
+    return f'<div style="margin-top:12px">{dots}</div>'
+
+
+def svg_line_chart(series, x_values, y_min, y_max, width=940, height=330, pad=52) -> str:
+    x_lo, x_hi = min(x_values), max(x_values)
+
+    def sx(x):
+        return pad + (x - x_lo) / ((x_hi - x_lo) or 1) * (width - 2 * pad)
+
+    def sy(y):
+        return height - pad - (y - y_min) / ((y_max - y_min) or 1) * (height - 2 * pad)
+
+    p = [f'<svg viewBox="0 0 {width} {height}" style="width:100%;max-width:{width}px">']
+    for i in range(5):
+        yv = y_min + (y_max - y_min) * i / 4
+        p.append(f'<line x1="{pad}" y1="{sy(yv):.1f}" x2="{width - pad}" y2="{sy(yv):.1f}" '
+                 f'stroke="rgba(255,255,255,.08)"/>')
+        p.append(f'<text x="{pad - 8}" y="{sy(yv) + 4:.1f}" fill="{C_MUTED}" font-size="11" '
+                 f'text-anchor="end">{yv:.0f}%</text>')
+    for x in x_values:
+        p.append(f'<text x="{sx(x):.1f}" y="{height - pad + 20}" fill="{C_MUTED}" '
+                 f'font-size="11" text-anchor="middle">{x}</text>')
+    for _name, color, pts, dash in series:
+        line = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in pts)
+        p.append(f'<polyline points="{line}" fill="none" stroke="{color}" stroke-width="3" '
+                 f'stroke-dasharray="{dash}" stroke-linecap="round"/>')
+        for x, y in pts:
+            p.append(f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="4" fill="{color}"/>')
+    p.append("</svg>")
+    return "".join(p)
+
+
+def donut(pct: float | None, label: str, color: str) -> str:
+    if pct is None:
+        pct = 0.0
+    circ = 2 * 3.14159 * 44
+    filled = circ * min(max(pct, 0), 1)
+    return (
+        f'<div style="text-align:center;min-width:150px">'
+        f'<svg viewBox="0 0 110 110" style="width:110px">'
+        f'<circle cx="55" cy="55" r="44" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="12"/>'
+        f'<circle cx="55" cy="55" r="44" fill="none" stroke="{color}" stroke-width="12" '
+        f'stroke-linecap="round" stroke-dasharray="{filled:.1f} {circ:.1f}" '
+        f'transform="rotate(-90 55 55)"/>'
+        f'<text x="55" y="61" fill="{C_TEXT}" font-size="20" font-weight="800" '
+        f'text-anchor="middle">{pct * 100:.0f}%</text></svg>'
+        f'<div style="font-size:12px;color:{C_MUTED};margin-top:6px;max-width:150px">{label}</div></div>'
+    )
+
+# COMMAND ----------
+# ---- Gráfico 1 · Donuts de progresso + ranking com marcador de meta ----
+rk = ranking_ufs.orderBy(F.desc("taxa_pct")).collect()
+
+donuts = (
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;justify-content:center">'
+    + donut(pct_ufs_na_meta, "UFs na trajetória da meta", C_GREEN)
+    + donut(pct_municipios_meta, "Municípios monitorados na meta", C_CYAN)
+    + donut(taxa_media_ufs, f"Resultado médio · {REDE_SELECIONADA} {ANO}", C_VIOLET)
+    + (donut(meta_nacional, f"Meta nacional {ANO}", C_AMBER) if meta_nacional else "")
+    + "</div>"
+)
+displayHTML(chart_box("Progresso rumo a 2030", "Visão de gauges — abertura da seção de resultados", donuts))
+
+bars = []
+for r in rk:
+    taxa = r["taxa_pct"] or 0.0
+    color = STATUS_COLORS.get(r["status_meta"], C_MUTED)
+    marker = ""
+    if r["meta_pct"] is not None:
+        marker = (f'<div style="position:absolute;left:{min(r["meta_pct"], 100):.1f}%;top:-3px;'
+                  f'bottom:-3px;width:2px;background:{C_TEXT};opacity:.85" '
+                  f'title="meta {r["meta_pct"]}%"></div>')
+    gap_txt = f'{r["gap_pp"]:+.1f} pp'.replace(".", ",") if r["gap_pp"] is not None else "—"
+    bars.append(
+        f'<div style="display:flex;align-items:center;gap:10px;margin:5px 0">'
+        f'<div style="width:34px;font-size:12px;font-weight:700;color:{C_MUTED}">{r["sigla_uf"]}</div>'
+        f'<div style="flex:1;position:relative;height:16px;background:rgba(255,255,255,.07);'
+        f'border-radius:99px">{marker}'
+        f'<div style="position:absolute;left:0;top:0;bottom:0;width:{min(taxa, 100):.1f}%;'
+        f'background:{color};border-radius:99px;opacity:.9"></div></div>'
+        f'<div style="width:52px;font-size:12px;font-weight:700;text-align:right">'
+        f'{str(taxa).replace(".", ",")}%</div>'
+        f'<div style="width:70px;font-size:11px;color:{C_MUTED};text-align:right">{gap_txt}</div>'
+        f'</div>'
+    )
+ranking_html = "".join(bars) + legend(
+    [(s, c) for s, c in STATUS_COLORS.items()] + [("│ marcador = meta da UF", C_TEXT)]
+)
+displayHTML(chart_box(
+    f"Ranking das UFs — Indicador Criança Alfabetizada · {REDE_SELECIONADA} {ANO}",
+    "Barra = resultado · marcador branco = meta do ano · cor = status da trajetória",
+    ranking_html,
+))
+
+# COMMAND ----------
+# ---- Gráfico 2 · Trajetória até 2030 (resultado observado x meta nacional) ----
+hist = resultado_historico.collect()
+metas_l = meta_brasil_norm.orderBy("ano").collect()
+
+series_map = {}
+for r in hist:
+    series_map.setdefault(r["serie"], []).append((int(r["ano"]), float(r["valor_pct"])))
+palette = [C_CYAN, C_GREEN, C_VIOLET, C_AMBER]
+series = [
+    (name, palette[i % len(palette)], sorted(pts), "")
+    for i, (name, pts) in enumerate(sorted(series_map.items()))
+]
+if metas_l:
+    series.append((
+        "Meta nacional", C_RED,
+        [(int(m["ano"]), float(m["meta_brasil"]) * 100) for m in metas_l], "7 5",
+    ))
+
+all_years = sorted({x for _n, _c, pts, _d in series for x, _y in pts})
+all_vals = [y for _n, _c, pts, _d in series for _x, y in pts]
+svg = svg_line_chart(series, all_years, max(min(all_vals) - 5, 0), min(max(all_vals) + 5, 100))
+displayHTML(chart_box(
+    "Jornada até 2030 — resultado observado x meta nacional",
+    "Linhas sólidas = resultado por rede · tracejada vermelha = meta (interpolação documentada no CONTRACT)",
+    svg + legend([(n, c) for n, c, _p, _d in series]),
+))
+
+# COMMAND ----------
+# ---- Gráfico 3 · Matriz de prioridade (dispersão desempenho x evolução) ----
+mp = matriz_prioridade.collect()
+if mp:
+    W, H, PAD = 940, 380, 56
+    xs = [float(r["taxa_pct"]) for r in mp]
+    ys = [float(r["variacao_pp"]) for r in mp]
+    x_lo, x_hi = min(xs) - 4, max(xs) + 4
+    y_lo, y_hi = min(ys) - 2, max(ys) + 2
+
+    def px(v):
+        return PAD + (v - x_lo) / ((x_hi - x_lo) or 1) * (W - 2 * PAD)
+
+    def py(v):
+        return H - PAD - (v - y_lo) / ((y_hi - y_lo) or 1) * (H - 2 * PAD)
+
+    pts = [f'<svg viewBox="0 0 {W} {H}" style="width:100%;max-width:{W}px">']
+    if y_lo < 0 < y_hi:
+        pts.append(f'<line x1="{PAD}" y1="{py(0):.0f}" x2="{W - PAD}" y2="{py(0):.0f}" '
+                   f'stroke="rgba(255,255,255,.25)" stroke-dasharray="4 4"/>')
+        pts.append(f'<text x="{W - PAD}" y="{py(0) - 6:.0f}" fill="{C_MUTED}" font-size="10" '
+                   f'text-anchor="end">estabilidade</text>')
+    for r in mp:
+        color = STATUS_COLORS.get(r["status_meta"], C_MUTED)
+        raio = 6 + min(float(r["score_prioridade"] or 0), 12)
+        pts.append(f'<circle cx="{px(float(r["taxa_pct"])):.0f}" cy="{py(float(r["variacao_pp"])):.0f}" '
+                   f'r="{raio:.0f}" fill="{color}" fill-opacity=".75" stroke="{color}"/>')
+        pts.append(f'<text x="{px(float(r["taxa_pct"])):.0f}" '
+                   f'y="{py(float(r["variacao_pp"])) - raio - 4:.0f}" fill="{C_TEXT}" '
+                   f'font-size="11" font-weight="700" text-anchor="middle">{r["sigla_uf"]}</text>')
+    pts.append(f'<text x="{W / 2:.0f}" y="{H - 12}" fill="{C_MUTED}" font-size="11" '
+               f'text-anchor="middle">Resultado {ANO} (%)</text>')
+    pts.append(f'<text x="16" y="{H / 2:.0f}" fill="{C_MUTED}" font-size="11" '
+               f'transform="rotate(-90 16 {H / 2:.0f})" text-anchor="middle">Variação vs ano anterior (p.p.)</text>')
+    pts.append("</svg>")
+    displayHTML(chart_box(
+        "Matriz de prioridade — desempenho x evolução",
+        "Tamanho da bolha = score de prioridade · quadrante inferior-esquerdo = agir primeiro",
+        "".join(pts) + legend(list(STATUS_COLORS.items())),
+    ))
+else:
+    print("Sem ano anterior no recorte para montar a matriz.")
+
+# COMMAND ----------
+# ---- Gráfico 4 · Distribuição dos alunos e a linha de corte 743 (SIMULADO) ----
+if table_exists(T_ALUNOS):
+    dist = (
+        spark.table(T_ALUNOS)
+        .filter(F.col("ano") == ANO)
+        .withColumn("faixa", (F.floor(F.col("proficiencia_portugues") / 25) * 25).cast("int"))
+        .groupBy("faixa").count().orderBy("faixa").collect()
+    )
+    if dist:
+        max_n = max(r["count"] for r in dist)
+        cols = []
+        for r in dist:
+            alto = r["faixa"] >= 743 - 12  # faixa que contém o corte fica acima
+            color = C_GREEN if r["faixa"] >= 750 else (C_AMBER if alto else "rgba(255,255,255,.28)")
+            h = max(r["count"] / max_n * 170, 3)
+            cols.append(
+                f'<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;'
+                f'align-items:center;gap:4px" title="{r["faixa"]}–{r["faixa"] + 24}: {r["count"]} alunos">'
+                f'<div style="width:82%;height:{h:.0f}px;background:{color};'
+                f'border-radius:6px 6px 0 0"></div>'
+                f'<div style="font-size:9px;color:{C_MUTED}">{r["faixa"]}</div></div>'
+            )
+        corte_pos = None
+        faixas_x = [r["faixa"] for r in dist]
+        if faixas_x:
+            span = (max(faixas_x) + 25) - min(faixas_x)
+            corte_pos = (743 - min(faixas_x)) / span * 100
+        marcador = (
+            f'<div style="position:absolute;left:{corte_pos:.1f}%;top:0;bottom:22px;width:2px;'
+            f'background:{C_RED}"></div>'
+            f'<div style="position:absolute;left:{corte_pos:.1f}%;top:-4px;transform:translateX(8px);'
+            f'font-size:11px;font-weight:800;color:{C_RED}">corte 743 · alfabetizado →</div>'
+        ) if corte_pos is not None else ""
+        body = (
+            f'<div style="position:relative;padding-top:18px">{marcador}'
+            f'<div style="display:flex;align-items:flex-end;gap:2px;height:200px">'
+            + "".join(cols) + "</div></div>"
+            + legend([("≥ 750 (alfabetizado)", C_GREEN),
+                      ("faixa do corte", C_AMBER),
+                      ("abaixo do corte", "rgba(255,255,255,.28)")])
+        )
+        displayHTML(chart_box(
+            f"Distribuição de proficiência dos alunos · {ANO} (dados SIMULADOS)",
+            "Histograma por faixa de 25 pontos na escala Saeb — a linha vermelha é a regra oficial dos 743 pontos",
+            body,
+        ))
+
+# COMMAND ----------
+# ---- Gráfico 5 · Pulso do streaming ----
+if table_exists(T_EVENTOS):
+    pulso = (
+        spark.table(T_EVENTOS)
+        .withColumn("janela", F.date_format(F.date_trunc("hour", "_ingestion_timestamp"), "dd/MM HH'h'"))
+        .groupBy("janela")
+        .agg(F.count("*").alias("eventos"),
+             F.round(F.avg(F.unix_timestamp("_ingestion_timestamp")
+                           - F.unix_timestamp("event_time")), 1).alias("lat"))
+        .orderBy("janela").collect()
+    )
+    if pulso:
+        max_e = max(r["eventos"] for r in pulso)
+        cols = "".join(
+            f'<div style="flex:1;max-width:90px;display:flex;flex-direction:column;'
+            f'justify-content:flex-end;align-items:center;gap:6px">'
+            f'<div style="font-size:11px;font-weight:800">{r["eventos"]}</div>'
+            f'<div style="width:70%;height:{max(r["eventos"] / max_e * 150, 4):.0f}px;'
+            f'background:linear-gradient(180deg,{C_CYAN},{C_VIOLET});border-radius:8px 8px 0 0"></div>'
+            f'<div style="font-size:10px;color:{C_MUTED}">{r["janela"]}</div>'
+            f'<div style="font-size:9px;color:{C_MUTED}">lat {r["lat"]}s</div></div>'
+            for r in pulso
+        )
+        displayHTML(chart_box(
+            "Pulso do streaming — eventos por hora de ingestão",
+            "Evidência visual da ingestão híbrida: volume e latência média por janela",
+            f'<div style="display:flex;align-items:flex-end;gap:8px;height:220px;'
+            f'justify-content:center">{cols}</div>',
+        ))
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 13. Potencial de inteligência artificial
 # MAGIC
 # MAGIC A camada Gold já permite evoluir para três aplicações:
 # MAGIC
@@ -1012,7 +1291,7 @@ display(spark.createDataFrame(feature_rows))
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 13. Como montar o dashboard no Databricks
+# MAGIC ## 14. Como montar o dashboard no Databricks
 # MAGIC
 # MAGIC Adicione ao dashboard, nesta ordem:
 # MAGIC
