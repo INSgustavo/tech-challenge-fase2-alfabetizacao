@@ -158,7 +158,10 @@ metric = Row(
     schema_version="1.0",
     error_message=error_message,
 )
-spark.createDataFrame([metric]).write.mode("append").saveAsTable(
+# Schema explícito da própria tabela: max_event_time/error_message são None no
+# caminho feliz e a inferência de tipos falharia (CANNOT_DETERMINE_TYPE).
+schema_metrics = spark.table(f"{CATALOG}.observability.pipeline_metrics").schema
+spark.createDataFrame([metric], schema=schema_metrics).write.mode("append").saveAsTable(
     f"{CATALOG}.observability.pipeline_metrics")
 print(f"Auditoria registrada. run_id={RUN_ID}")
 
