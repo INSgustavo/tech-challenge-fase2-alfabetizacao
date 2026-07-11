@@ -99,6 +99,27 @@ print(f"→ 10 eventos publicados em {LANDING} (1 duplicado + 1 inválido)")
 # MAGIC ## Consumer — validação de contrato + quarentena + dedup
 
 # COMMAND ----------
+# A tabela alvo é criada AQUI, na sessão principal, antes do stream: dentro do
+# foreachBatch (processo isolado do serverless) a checagem de existência não é
+# confiável e causava TABLE_OR_VIEW_ALREADY_EXISTS entre micro-batches.
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {TARGET} (
+    event_id STRING,
+    event_time TIMESTAMP,
+    schema_version STRING,
+    ano INT,
+    sigla_uf STRING,
+    id_municipio STRING,
+    rede INT,
+    taxa_alfabetizacao DOUBLE,
+    source STRING,
+    _source_file STRING,
+    _ingestion_timestamp TIMESTAMP,
+    _pipeline_run_id STRING
+) USING DELTA
+COMMENT 'Eventos de medição recebidos via streaming, deduplicados por event_id.'
+""")
+
 regras_validade = (
     F.col("event_id").isNotNull()
     & F.col("event_time").isNotNull()
@@ -133,14 +154,11 @@ def process_batch(df, batch_id):
          )
          .write.mode("append").saveAsTable(QUARANTINE))
 
-    if not session.catalog.tableExists(TARGET):
-        validos.write.format("delta").saveAsTable(TARGET)
-    else:
-        from delta.tables import DeltaTable
-        (DeltaTable.forName(session, TARGET).alias("t")
-         .merge(validos.alias("s"), "t.event_id = s.event_id")
-         .whenNotMatchedInsertAll()
-         .execute())
+    from delta.tables import DeltaTable
+    (DeltaTable.forName(session, TARGET).alias("t")
+     .merge(validos.alias("s"), "t.event_id = s.event_id")
+     .whenNotMatchedInsertAll()
+     .execute())
 
 
 query = (
