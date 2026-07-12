@@ -12,7 +12,11 @@ from datetime import datetime, timezone
 from pyspark.sql import Row, functions as F
 
 CATALOG = "workspace"
-RUN_ID = str(uuid.uuid4())
+# run_id injetado pelo Workflow ({{job.run_id}}) para correlacionar as tasks.
+try:
+    RUN_ID = dbutils.widgets.get("run_id") or str(uuid.uuid4())
+except Exception:
+    RUN_ID = str(uuid.uuid4())
 started_at = datetime.now(timezone.utc)
 
 # Thresholds definidos pelo grupo
@@ -174,8 +178,4 @@ spark.createDataFrame(rows, schema=schema_metrics).write.mode("append").saveAsTa
 print(f"✓ métricas persistidas (run_id={RUN_ID})")
 if alertas:
     print("\n🚨 ALERTAS:")
-    for a in alertas:
-        print(f"  - {a}")
-    # Em produção: notificação por e-mail/Slack via Workflows ou webhook.
-else:
-    print("✓ Nenhum alerta disparado")
+    

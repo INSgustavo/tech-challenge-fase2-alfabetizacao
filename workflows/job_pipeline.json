@@ -1,104 +1,99 @@
 {
   "name": "pipeline-alfabetizacao",
+  "description": "Pipeline hibrido (batch + streaming) do indicador de alfabetizacao. run_id do Job e propagado a todas as tasks para rastreabilidade ponta a ponta em observability.pipeline_metrics.",
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 3600,
+  "schedule": {
+    "quartz_cron_expression": "0 0 6 * * ?",
+    "timezone_id": "America/Sao_Paulo",
+    "pause_status": "PAUSED"
+  },
+  "email_notifications": {
+    "on_failure": ["gustavopietro93@gmail.com"],
+    "no_alert_for_skipped_runs": true
+  },
+  "parameters": [
+    {
+      "name": "run_id",
+      "default": "{{job.run_id}}"
+    }
+  ],
   "tasks": [
     {
       "task_key": "setup",
       "notebook_task": {
-        "notebook_path": "notebooks/00_setup_ambiente"
+        "notebook_path": "notebooks/00_setup_ambiente",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "bronze_batch",
-      "depends_on": [
-        {
-          "task_key": "setup"
-        }
-      ],
+      "depends_on": [{ "task_key": "setup" }],
       "notebook_task": {
-        "notebook_path": "notebooks/01_bronze_batch"
+        "notebook_path": "notebooks/01_bronze_batch",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "bronze_streaming",
-      "depends_on": [
-        {
-          "task_key": "setup"
-        }
-      ],
+      "depends_on": [{ "task_key": "setup" }],
       "notebook_task": {
-        "notebook_path": "notebooks/02_bronze_streaming"
+        "notebook_path": "notebooks/02_bronze_streaming",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "silver",
       "depends_on": [
-        {
-          "task_key": "bronze_batch"
-        },
-        {
-          "task_key": "bronze_streaming"
-        }
+        { "task_key": "bronze_batch" },
+        { "task_key": "bronze_streaming" }
       ],
       "notebook_task": {
-        "notebook_path": "notebooks/03_silver"
+        "notebook_path": "notebooks/03_silver",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "quality",
-      "depends_on": [
-        {
-          "task_key": "silver"
-        }
-      ],
+      "depends_on": [{ "task_key": "silver" }],
       "notebook_task": {
-        "notebook_path": "notebooks/06_quality_checks"
+        "notebook_path": "notebooks/06_quality_checks",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "gold",
-      "depends_on": [
-        {
-          "task_key": "quality"
-        }
-      ],
+      "depends_on": [{ "task_key": "quality" }],
       "notebook_task": {
-        "notebook_path": "notebooks/04_gold"
+        "notebook_path": "notebooks/04_gold",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "serving",
-      "depends_on": [
-        {
-          "task_key": "gold"
-        }
-      ],
+      "depends_on": [{ "task_key": "gold" }],
       "notebook_task": {
-        "notebook_path": "notebooks/05_serving_mongodb"
+        "notebook_path": "notebooks/05_serving_mongodb",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "mlflow",
-      "depends_on": [
-        {
-          "task_key": "gold"
-        }
-      ],
+      "depends_on": [{ "task_key": "gold" }],
       "notebook_task": {
-        "notebook_path": "notebooks/07_ml_mlflow"
+        "notebook_path": "notebooks/07_ml_mlflow",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     },
     {
       "task_key": "monitoring",
       "depends_on": [
-        {
-          "task_key": "serving"
-        },
-        {
-          "task_key": "mlflow"
-        }
+        { "task_key": "serving" },
+        { "task_key": "mlflow" }
       ],
       "notebook_task": {
-        "notebook_path": "notebooks/08_monitoring"
+        "notebook_path": "notebooks/08_monitoring",
+        "base_parameters": { "run_id": "{{job.run_id}}" }
       }
     }
   ]
