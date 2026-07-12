@@ -21,7 +21,13 @@ LANDING = f"/Volumes/{CATALOG}/bronze/streaming_landing/"
 CHECKPOINT = f"/Volumes/{CATALOG}/observability/checkpoints/bronze_streaming/"
 TARGET = f"{CATALOG}.bronze.eventos_streaming"
 QUARANTINE = f"{CATALOG}.observability.quarantine_records"
-RUN_ID = str(uuid.uuid4())
+
+# run_id injetado pelo Workflow ({{job.run_id}} em workflows/job_pipeline.json)
+# para correlacionar todas as tasks de uma execução; standalone gera um novo.
+try:
+    RUN_ID = dbutils.widgets.get("run_id") or str(uuid.uuid4())
+except Exception:
+    RUN_ID = str(uuid.uuid4())
 
 UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
        "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]
@@ -140,8 +146,13 @@ def process_batch(df, batch_id):
           .withColumn("_pipeline_run_id", F.lit(RUN_ID))
           .dropDuplicates(["event_id"]))
 
-    invalidos = df.filter(~regras_validade)
-    validos = df.filter(regras_validade)
+    # Semântica de NULL: um campo nulo torna `regras_validade` NULL — nem
+    # filter(regra) nem filter(~regra) capturariam o registro, que seria
+    # perdido em silêncio. coalesce(regra, False) garante que TODO registro
+    # não-válido (incluindo os com campos nulos) vá para a quarentena.
+    is_valido = F.coalesce(regras_validade, F.lit(False))
+    invalidos = df.filter(~is_valido)
+    validos = df.filter(is_valido)
 
     if invalidos.limit(1).count() > 0:
         (invalidos
@@ -184,21 +195,4 @@ print(f"✓ eventos deste run na quarentena: {quar}")
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## (Opcional) Demo interativa — stream contínuo por 60s
-# MAGIC Para a gravação do vídeo: descomente, rode esta célula e publique eventos
-# MAGIC pelo producer em outra aba. Micro-batches a cada 10s; para sozinho.
-
-# COMMAND ----------
-# import time
-# query = (
-#     spark.readStream.schema(SCHEMA).json(LANDING)
-#     .select("*", F.col("_metadata.file_path").alias("_source_file"))
-#     .writeStream
-#     .option("checkpointLocation", CHECKPOINT)
-#     .trigger(processingTime="10 seconds")
-#     .foreachBatch(process_batch)
-#     .start()
-# )
-# for _ in range(6):
-#     time.sleep(10)
-#     print(f"[{datetime.now():%H:%M:%S}] eventos: {spark.table(TARGET).count():,}")
-# query.stop()
+# MAGIC Para a gravação do vídeo: desc
