@@ -4,13 +4,15 @@
 # MAGIC Valida a Silver **antes** da publicação da Gold (contrato, seção 8).
 # MAGIC
 # MAGIC O que este notebook faz:
-# MAGIC 1. Aplica validações **por registro** e move os reprovados para
+# MAGIC 1. Valida **integridade referencial** contra as dimensões (`bronze.municipio`
+# MAGIC    e `bronze.uf`) e a consistência entre tabelas (UF × município).
+# MAGIC 2. Aplica validações **por registro** e move os reprovados para
 # MAGIC    `observability.quarantine_records` com `rejection_reason`.
-# MAGIC 2. Publica os registros aprovados em `silver.medicoes_aprovadas`
+# MAGIC 3. Publica os registros aprovados em `silver.medicoes_aprovadas`
 # MAGIC    (fonte da Gold).
-# MAGIC 3. Aplica validações **sistêmicas** (volume, cobertura, duplicidade).
+# MAGIC 4. Aplica validações **sistêmicas** (volume, cobertura, duplicidade).
 # MAGIC    Se alguma falhar, a task **reprova** e a Gold não é sobrescrita.
-# MAGIC 4. Registra a execução em `observability.pipeline_metrics`.
+# MAGIC 5. Registra a execução em `observability.pipeline_metrics`.
 
 # COMMAND ----------
 CATALOG = "workspace"
@@ -44,6 +46,40 @@ print(f"Silver lida: {rows_read:,} registros")
 
 # COMMAND ----------
 # MAGIC %md
+# MAGIC ## 0. Integridade referencial contra as dimensões
+# MAGIC Valida as chaves de relacionamento exigidas pelo edital:
+# MAGIC - `id_municipio` deve existir em `bronze.municipio` (grão municipal);
+# MAGIC - `sigla_uf` deve existir em `bronze.uf`;
+# MAGIC - consistência entre tabelas: a UF do registro deve bater com a UF do
+# MAGIC   município na dimensão (flag `uf_consistente` calculada na Silver).
+
+# COMMAND ----------
+DIM_MUN = f"{CATALOG}.bronze.municipio"
+DIM_UF = f"{CATALOG}.bronze.uf"
+
+if spark.catalog.tableExists(DIM_MUN):
+    ids_validos = (spark.table(DIM_MUN)
+                   .select(F.lpad(F.col("id_municipio").cast("string"), 7, "0")
+                           .alias("id_municipio"))
+                   .distinct()
+                   .withColumn("_fk_municipio_ok", F.lit(True)))
+    s = s.join(ids_validos, on="id_municipio", how="left")
+else:
+    print(f"⚠ {DIM_MUN} não existe — check de FK municipal não aplicado.")
+    s = s.withColumn("_fk_municipio_ok", F.lit(True))
+
+if spark.catalog.tableExists(DIM_UF):
+    ufs_dim = (spark.table(DIM_UF)
+               .select(F.upper(F.trim(F.col("sigla_uf"))).alias("sigla_uf"))
+               .distinct()
+               .withColumn("_fk_uf_ok", F.lit(True)))
+    s = s.join(ufs_dim, on="sigla_uf", how="left")
+else:
+    print(f"⚠ {DIM_UF} não existe — check de FK de UF não aplicado.")
+    s = s.withColumn("_fk_uf_ok", F.lit(True))
+
+# COMMAND ----------
+# MAGIC %md
 # MAGIC ## 1. Validações por registro → motivo de rejeição
 # MAGIC A primeira regra violada define o `rejection_reason` do registro.
 
@@ -65,13 +101,21 @@ rejection_reason = (
     .when(~F.col("rede").isin([0, 2, 3, 5]), F.lit("rede_fora_do_dominio"))
     .when(F.col("taxa_alfabetizacao").isNotNull()
           & ~F.col("taxa_alfabetizacao").between(0.0, 1.0), F.lit("taxa_fora_do_dominio"))
+    # integridade referencial (edital: validação de chaves de relacionamento)
+    .when(F.col("id_municipio").isNotNull() & F.col("_fk_municipio_ok").isNull(),
+          F.lit("municipio_inexistente_na_dimensao"))
+    .when(F.col("_fk_uf_ok").isNull(), F.lit("uf_inexistente_na_dimensao"))
+    # consistência entre tabelas: UF do registro x UF do município na dimensão
+    .when(F.col("uf_consistente") == False,  # noqa: E712 — coluna booleana nullável
+          F.lit("uf_incompativel_com_municipio"))
     .otherwise(F.lit(None))
 )
 
 marcada = s.withColumn("rejection_reason", rejection_reason)
 
 invalidos = marcada.filter(F.col("rejection_reason").isNotNull())
-aprovados = marcada.filter(F.col("rejection_reason").isNull()).drop("rejection_reason")
+aprovados = (marcada.filter(F.col("rejection_reason").isNull())
+             .drop("rejection_reason", "_fk_municipio_ok", "_fk_uf_ok"))
 
 rows_rejected = invalidos.count()
 rows_written = aprovados.count()
@@ -84,7 +128,7 @@ print(f"Aprovados: {rows_written:,} | Reprovados (quarentena): {rows_rejected:,}
 
 # COMMAND ----------
 if rows_rejected > 0:
-    payload_cols = [c for c in s.columns]
+    payload_cols = [c for c in s.columns if not c.startswith("_fk_")]
     quarentena = (
         invalidos
         .withColumn("run_id", F.lit(RUN_ID))

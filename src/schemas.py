@@ -21,12 +21,23 @@ SCHEMA_EVENTO_STREAMING = StructType([
     StructField("source", StringType(), False),
 ])
 
-# Ajustar após validação do schema real da fonte.
+# Schema real da fonte batch (br_inep_avaliacao_alfabetizacao_uf.csv.gz).
+# Grão UF: a fonte NÃO possui id_municipio. Mantido em sincronia com
+# notebooks/01_bronze_batch.py.
 SCHEMA_AVALIACAO = StructType([
-    StructField("ano", IntegerType(), True),
-    StructField("sigla_uf", StringType(), True),
-    StructField("id_municipio", StringType(), True),
-    StructField("rede", IntegerType(), True),
-    StructField("media_portugues", DoubleType(), True),
+    StructField("ano", IntegerType(), False),
+    StructField("sigla_uf", StringType(), False),
+    StructField("serie", IntegerType(), False),
+    StructField("rede", IntegerType(), False),
     StructField("taxa_alfabetizacao", DoubleType(), True),
+    StructField("media_portugues", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_0", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_1", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_2", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_3", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_4", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_5", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_6", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_7", DoubleType(), True),
+    StructField("proporcao_aluno_nivel_8", DoubleType(), True),
 ])
