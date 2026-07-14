@@ -16,6 +16,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
+from pyspark.sql import functions as F
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -29,8 +30,13 @@ from sklearn.preprocessing import OneHotEncoder
 # MAGIC ## 1. Montagem do dataset (Gold → pandas)
 
 # COMMAND ----------
+# `fonte_preferencial` mantém uma linha por município: a Gold guarda a medição
+# oficial e a do simulador lado a lado, e treinar sobre as duas duplicaria o mesmo
+# território no dataset — inflando o peso dos municípios com dupla origem e
+# vazando a mesma informação entre treino e teste.
 pdf = (
     spark.table(f"{CATALOG}.gold.indicador_municipio")
+    .filter(F.col("fonte_preferencial"))
     .select("ano", "sigla_uf", "rede", "taxa_alfabetizacao_media")
     .toPandas()
     .dropna(subset=["taxa_alfabetizacao_media"])
