@@ -22,18 +22,24 @@ from pyspark.sql import types as T
 
 CATALOG = "workspace"
 
-# Tabelas centrais
+# Tabelas centrais.
+#
+# Medalhão: todo indicador educacional deste painel vem da GOLD. As metas, as
+# dimensões, o nome do município e a distribuição de proficiência já chegam
+# integrados nos marts — o dashboard não lê a Bronze para reconstruí-los.
 T_RESUMO_UF = f"{CATALOG}.gold.resumo_uf"
 T_IND_MUN = f"{CATALOG}.gold.indicador_municipio"
 T_META_RESULTADO = f"{CATALOG}.gold.meta_vs_resultado"
 T_EVOLUCAO = f"{CATALOG}.gold.evolucao_temporal"
-T_META_BRASIL = f"{CATALOG}.bronze.meta_brasil"
-T_META_UF = f"{CATALOG}.bronze.meta_uf"
-T_ALUNOS = f"{CATALOG}.bronze.alunos"
-T_EVENTOS = f"{CATALOG}.bronze.eventos_streaming"
+T_DISTRIBUICAO = f"{CATALOG}.gold.distribuicao_proficiencia"
 T_METRICAS = f"{CATALOG}.observability.pipeline_metrics"
 T_QUARENTENA = f"{CATALOG}.observability.quarantine_records"
 T_SILVER = f"{CATALOG}.silver.medicoes_alfabetizacao"
+
+# Única leitura de Bronze do painel, e não é analítica: telemetria do streaming
+# (volume, latência, frescor). É a fonte de verdade operacional dos eventos e não
+# alimenta nenhum indicador educacional.
+T_EVENTOS = f"{CATALOG}.bronze.eventos_streaming"
 
 # COMMAND ----------
 # MAGIC %md
@@ -51,22 +57,6 @@ def require_tables(tables: list[str]) -> None:
             "Execute os notebooks anteriores antes do dashboard. "
             f"Tabelas obrigatórias ausentes: {', '.join(missing)}"
         )
-
-
-def numeric_column_like(df: DataFrame, token: str) -> str | None:
-    """Localiza uma coluna numérica cujo nome contenha o token informado."""
-    numeric_prefixes = ("tinyint", "smallint", "int", "bigint", "float", "double", "decimal")
-    candidates = [
-        column
-        for column, dtype in df.dtypes
-        if token.lower() in column.lower() and dtype.lower().startswith(numeric_prefixes)
-    ]
-    return candidates[0] if candidates else None
-
-
-def normalize_rate(column: F.Column) -> F.Column:
-    """Normaliza percentuais 0–100 para frações 0–1 sem alterar valores já normalizados."""
-    return F.when(column > 1.0, column / F.lit(100.0)).otherwise(column)
 
 
 def safe_count(table_name: str) -> int:
@@ -132,16 +122,18 @@ for widget_name in ["ano_dashboard", "rede_dashboard", "uf_dashboard"]:
     except Exception:
         pass
 
+TODOS = "Todos"
+
 dbutils.widgets.dropdown(
     "ano_dashboard",
     available_years[0],
-    available_years,
+    [TODOS] + available_years,
     "Ano de referência",
 )
 dbutils.widgets.dropdown(
     "rede_dashboard",
     "Rede pública",
-    ["Rede pública", "Total", "Estadual", "Municipal", "Privada"],
+    ["Rede pública", "Todas as redes", "Total", "Estadual", "Municipal", "Privada"],
     "Rede de ensino",
 )
 dbutils.widgets.dropdown(
@@ -151,12 +143,35 @@ dbutils.widgets.dropdown(
     "Recorte territorial",
 )
 
-ANO = int(dbutils.widgets.get("ano_dashboard"))
+# Com "Todos" o painel deixa de ser um retrato de um ano e passa a mostrar a média
+# dos anos disponíveis — tanto no resultado quanto na meta. `ANO` fica None, e é o
+# helper `filtro_ano` que decide aplicar ou não o recorte; nenhum ponto do notebook
+# deve comparar `F.col("ano") == ANO` diretamente.
+ANO_SELECIONADO = dbutils.widgets.get("ano_dashboard")
+TODOS_OS_ANOS = ANO_SELECIONADO == TODOS
+ANO = None if TODOS_OS_ANOS else int(ANO_SELECIONADO)
+ANO_LABEL = (f"{available_years[-1]}–{available_years[0]}"
+             if TODOS_OS_ANOS else str(ANO))
+
 REDE_SELECIONADA = dbutils.widgets.get("rede_dashboard")
 UF_SELECIONADA = dbutils.widgets.get("uf_dashboard")
 
+
+def filtro_ano(df: DataFrame, coluna: str = "ano") -> DataFrame:
+    """Aplica o recorte de ano. Sem efeito quando 'Todos' está selecionado ou
+    quando a tabela não tem a coluna de ano."""
+    if TODOS_OS_ANOS or coluna not in df.columns:
+        return df
+    return df.filter(F.col(coluna) == ANO)
+
+
+# "Todas as redes" agrega as três redes desagregadas e NÃO inclui o código 0
+# (Total): o Total é o agregado oficial do INEP sobre estadual + municipal +
+# privada, então somá-lo às próprias partes contaria os mesmos alunos duas vezes.
+# Quem quiser o número oficial consolidado seleciona "Total".
 REDE_CODES = {
     "Rede pública": [2, 3],
+    "Todas as redes": [2, 3, 5],
     "Total": [0],
     "Estadual": [2],
     "Municipal": [3],
@@ -164,10 +179,15 @@ REDE_CODES = {
 }
 rede_codes = REDE_CODES[REDE_SELECIONADA]
 
-print(f"Filtros ativos: ano={ANO} | rede={REDE_SELECIONADA} | UF={UF_SELECIONADA}")
+print(f"Filtros ativos: ano={ANO_SELECIONADO} | rede={REDE_SELECIONADA} | UF={UF_SELECIONADA}")
+if TODOS_OS_ANOS:
+    print(f"  → agregando {len(available_years)} anos ({ANO_LABEL}): as taxas e metas "
+          "exibidas são a média do período; a matriz de tendência fica indisponível.")
 
 # COMMAND ----------
-# Dimensão regional independente de variações de schema da fonte de UF.
+# Dimensão regional de referência. A Gold já traz `regiao` (herdada da dimensão
+# IBGE no join da Silver) — este mapa é só o fallback para UFs em que ela venha
+# nula, garantindo que os cortes regionais não percam linhas.
 REGIAO_UF = {
     "AC": "Norte", "AP": "Norte", "AM": "Norte", "PA": "Norte",
     "RO": "Norte", "RR": "Norte", "TO": "Norte",
@@ -177,28 +197,54 @@ REGIAO_UF = {
     "ES": "Sudeste", "MG": "Sudeste", "RJ": "Sudeste", "SP": "Sudeste",
     "PR": "Sul", "RS": "Sul", "SC": "Sul",
 }
-regiao_dim = spark.createDataFrame(
+# A coluna de referência se chama `regiao_ref`, e não `regiao`: unir duas colunas
+# homônimas a um DataFrame que já tem `regiao` (a Gold tem) deixaria a referência
+# ambígua no groupBy seguinte.
+regiao_ref = spark.createDataFrame(
     [(uf, regiao) for uf, regiao in REGIAO_UF.items()],
-    ["sigla_uf", "regiao"],
+    ["sigla_uf", "regiao_ref"],
 )
 
-# Base filtrada por rede. Para "Rede pública", média das redes estadual e municipal disponíveis.
-uf_ano = (
-    resumo_uf
-    .filter((F.col("ano") == ANO) & F.col("rede").isin(rede_codes))
+
+def com_regiao(df: DataFrame) -> DataFrame:
+    """Resolve `regiao` como coluna única: usa a da Gold e cai no mapa de
+    referência quando ela está nula ou ausente do DataFrame."""
+    base = (df if "regiao" in df.columns
+            else df.withColumn("regiao", F.lit(None).cast("string")))
+    return (
+        base
+        .join(regiao_ref, "sigla_uf", "left")
+        .withColumn("regiao", F.coalesce(F.col("regiao"), F.col("regiao_ref")))
+        .drop("regiao_ref")
+    )
+
+
+# Base filtrada por rede. Para "Rede pública", média das redes estadual e municipal
+# disponíveis. Com "Todos" os anos, a média também atravessa os anos do período.
+uf_ano = com_regiao(
+    filtro_ano(resumo_uf)
+    .filter(F.col("rede").isin(rede_codes))
     .groupBy("sigla_uf")
     .agg(
         F.avg("taxa_alfabetizacao_media").alias("taxa_resultado"),
         F.max("updated_at").alias("updated_at"),
+        # regiao é funcionalmente dependente da UF: preserva o valor da Gold sem
+        # abrir o grão do agrupamento (incluí-la no groupBy duplicaria a UF se
+        # alguma linha viesse com regiao nula).
+        F.first("regiao", ignorenulls=True).alias("regiao"),
     )
-    .join(regiao_dim, "sigla_uf", "left")
 )
 
 if UF_SELECIONADA != "Todas":
     uf_ano = uf_ano.filter(F.col("sigla_uf") == UF_SELECIONADA)
 
-# Ano anterior disponível, usado para calcular tendência.
-previous_years = [int(year) for year in available_years if int(year) < ANO]
+# Ano anterior disponível, usado para calcular tendência. Não existe "ano anterior"
+# para uma média do período inteiro: com "Todos", a tendência é omitida em vez de
+# ser inventada, e as visões que dependem dela avisam na tela.
+previous_years = (
+    [] if TODOS_OS_ANOS
+    else [int(year) for year in available_years if int(year) < ANO]
+)
 ANO_ANTERIOR = max(previous_years) if previous_years else None
 
 if ANO_ANTERIOR is not None:
@@ -218,64 +264,41 @@ else:
     )
 
 # COMMAND ----------
-# Metas normalizadas. O código identifica defensivamente a coluna numérica de meta.
-meta_uf_norm = None
-if table_exists(T_META_UF):
-    raw_meta_uf = spark.table(T_META_UF)
-    meta_column = numeric_column_like(raw_meta_uf, "meta")
-    if meta_column and {"ano", "sigla_uf"}.issubset(raw_meta_uf.columns):
-        meta_uf_norm = (
-            raw_meta_uf
-            .select(
-                F.col("ano").cast("int").alias("ano"),
-                F.upper(F.trim(F.col("sigla_uf"))).alias("sigla_uf"),
-                normalize_rate(F.col(meta_column).cast("double")).alias("meta_uf"),
-            )
-            .dropDuplicates(["ano", "sigla_uf"])
-        )
+# Metas — lidas da GOLD, não da Bronze.
+#
+# Este notebook é camada de consumo: ler `bronze.meta_uf` aqui significaria
+# reimplementar a normalização que a Silver já fez (notebook 03) e manter duas
+# definições paralelas da mesma meta, livres para divergir. A Gold já publica a
+# meta associada a cada território em `meta_vs_resultado.meta_taxa` — é essa que
+# o painel usa, garantindo que o número do dashboard é o mesmo do mart.
+meta_uf_norm = (
+    meta_vs_resultado
+    .filter((F.col("grao") == "uf") & F.col("meta_taxa").isNotNull())
+    .groupBy("ano", "sigla_uf")
+    .agg(F.avg("meta_taxa").alias("meta_uf"))
+)
 
-if meta_uf_norm is None:
-    meta_uf_norm = spark.createDataFrame(
-        [],
-        T.StructType([
-            T.StructField("ano", T.IntegerType()),
-            T.StructField("sigla_uf", T.StringType()),
-            T.StructField("meta_uf", T.DoubleType()),
-        ]),
-    )
+meta_brasil_norm = (
+    meta_vs_resultado
+    .filter(F.col("meta_brasil").isNotNull())
+    .groupBy("ano")
+    .agg(F.avg("meta_brasil").alias("meta_brasil"))
+)
 
-meta_brasil_norm = None
-if table_exists(T_META_BRASIL):
-    raw_meta_brasil = spark.table(T_META_BRASIL)
-    meta_column = numeric_column_like(raw_meta_brasil, "meta")
-    if meta_column and "ano" in raw_meta_brasil.columns:
-        meta_brasil_norm = (
-            raw_meta_brasil
-            .select(
-                F.col("ano").cast("int").alias("ano"),
-                normalize_rate(F.col(meta_column).cast("double")).alias("meta_brasil"),
-            )
-            .dropDuplicates(["ano"])
-        )
-
-if meta_brasil_norm is None:
-    meta_brasil_norm = spark.createDataFrame(
-        [],
-        T.StructType([
-            T.StructField("ano", T.IntegerType()),
-            T.StructField("meta_brasil", T.DoubleType()),
-        ]),
-    )
+# Meta do recorte: uma linha por UF. Com um ano selecionado o avg é sobre a única
+# meta daquele ano; com "Todos", é a meta média do período — mantendo meta e
+# resultado na mesma base de comparação (senão o gap sairia errado sem dar erro).
+meta_uf_recorte = (
+    filtro_ano(meta_uf_norm)
+    .groupBy("sigla_uf")
+    .agg(F.avg("meta_uf").alias("meta_uf"))
+)
 
 # Ranking enriquecido com meta, variação e score de prioridade.
 ranking_ufs = (
     uf_ano
     .join(uf_anterior, "sigla_uf", "left")
-    .join(
-        meta_uf_norm.filter(F.col("ano") == ANO).drop("ano"),
-        "sigla_uf",
-        "left",
-    )
+    .join(meta_uf_recorte, "sigla_uf", "left")
     .withColumn("variacao", F.col("taxa_resultado") - F.col("taxa_anterior"))
     .withColumn("gap_meta", F.col("taxa_resultado") - F.col("meta_uf"))
     .withColumn(
@@ -318,7 +341,7 @@ ufs_com_dados = kpi_educacao["ufs_com_dados"]
 gold_updated_at = kpi_educacao["gold_updated_at"]
 
 meta_nacional = scalar(
-    meta_brasil_norm.filter(F.col("ano") == ANO),
+    filtro_ano(meta_brasil_norm).agg(F.avg("meta_brasil").alias("meta_brasil")),
     "meta_brasil",
 )
 gap_nacional = (
@@ -335,9 +358,19 @@ ufs_na_meta = meta_stats["ufs_na_meta"] or 0
 ufs_com_meta = meta_stats["ufs_com_meta"] or 0
 pct_ufs_na_meta = ufs_na_meta / ufs_com_meta if ufs_com_meta else None
 
-# KPIs municipais
-municipal_filtrado = meta_vs_resultado.filter(
-    (F.col("ano") == ANO) & F.col("rede").isin(rede_codes)
+# KPIs municipais. Três recortes obrigatórios no mart meta_vs_resultado:
+#  - `grao`: o mart cobre UF e município; sem o filtro, as linhas de grão UF
+#    entrariam aqui com id_municipio nulo e disputariam espaço na lista de
+#    municípios prioritários (seção 7);
+#  - `fonte_preferencial`: um município pode ter linha oficial E linha do
+#    simulador no mesmo ano; sem o filtro, a média misturaria dado real com
+#    simulado. A Gold já elegeu a melhor fonte por território (notebook 04);
+#  - ano e rede, como no resto do painel.
+municipal_filtrado = filtro_ano(meta_vs_resultado).filter(
+    (F.col("grao") == "municipio")
+    & F.col("id_municipio").isNotNull()
+    & F.col("fonte_preferencial")
+    & F.col("rede").isin(rede_codes)
 )
 if UF_SELECIONADA != "Todas":
     municipal_filtrado = municipal_filtrado.filter(F.col("sigla_uf") == UF_SELECIONADA)
@@ -355,7 +388,7 @@ stream_p95 = None
 last_event = None
 if table_exists(T_EVENTOS):
     eventos = spark.table(T_EVENTOS)
-    eventos_ano = eventos.filter(F.col("ano") == ANO) if "ano" in eventos.columns else eventos
+    eventos_ano = filtro_ano(eventos)
     if UF_SELECIONADA != "Todas" and "sigla_uf" in eventos_ano.columns:
         eventos_ano = eventos_ano.filter(F.col("sigla_uf") == UF_SELECIONADA)
     stream_events = eventos_ano.count()
@@ -562,7 +595,7 @@ hero_html = Template(r"""
     pipeline_health=pipeline_health,
     taxa_media=fmt_pct(taxa_media_ufs),
     rede=REDE_SELECIONADA,
-    ano=ANO,
+    ano=ANO_LABEL,
     meta_nacional=fmt_pct(meta_nacional),
     gap_nacional=fmt_pp(gap_nacional),
     ufs_meta=f"{ufs_na_meta}/{ufs_com_meta}" if ufs_com_meta else "—",
@@ -685,9 +718,10 @@ display(trajetoria_2030)
 
 # COMMAND ----------
 desigualdade_regional = (
-    resumo_uf
-    .filter((F.col("ano") == ANO) & F.col("rede").isin([0, 2, 3, 5]))
-    .join(regiao_dim, "sigla_uf", "left")
+    com_regiao(
+        filtro_ano(resumo_uf)
+        .filter(F.col("rede").isin([0, 2, 3, 5]))
+    )
     .groupBy("regiao", "rede_label")
     .agg(
         F.round(F.avg("taxa_alfabetizacao_media") * 100, 1).alias("taxa_pct"),
@@ -706,21 +740,10 @@ display(desigualdade_regional)
 # MAGIC A lista usa somente registros com meta municipal disponível e prioriza o maior déficit.
 
 # COMMAND ----------
-municipio_dim = None
-if table_exists(f"{CATALOG}.bronze.municipio"):
-    raw_municipio = spark.table(f"{CATALOG}.bronze.municipio")
-    name_candidates = ["nome_municipio", "municipio", "nome"]
-    municipality_name = next((c for c in name_candidates if c in raw_municipio.columns), None)
-    if municipality_name and "id_municipio" in raw_municipio.columns:
-        municipio_dim = (
-            raw_municipio
-            .select(
-                F.lpad(F.col("id_municipio").cast("string"), 7, "0").alias("id_municipio"),
-                F.col(municipality_name).cast("string").alias("nome_municipio"),
-            )
-            .dropDuplicates(["id_municipio"])
-        )
-
+# `nome_municipio` vem da GOLD. A dimensão IBGE já foi integrada na Silver
+# (notebook 03), então ler `bronze.municipio` aqui seria a camada de consumo
+# pulando o Medalhão para refazer um join que já está feito. Se o nome vier nulo,
+# o problema está no join da Silver e deve aparecer lá — não ser mascarado aqui.
 municipios_prioritarios = (
     municipal_filtrado
     .filter(F.col("meta_taxa").isNotNull())
@@ -735,15 +758,6 @@ municipios_prioritarios = (
         .otherwise("Crítica"),
     )
 )
-
-if municipio_dim is not None:
-    municipios_prioritarios = municipios_prioritarios.join(
-        municipio_dim, "id_municipio", "left"
-    )
-else:
-    municipios_prioritarios = municipios_prioritarios.withColumn(
-        "nome_municipio", F.lit(None).cast("string")
-    )
 
 municipios_prioritarios = municipios_prioritarios.select(
     "sigla_uf",
@@ -820,66 +834,50 @@ else:
 # MAGIC Os dados desta seção são simulados e devem ser apresentados dessa forma no vídeo.
 
 # COMMAND ----------
-if table_exists(T_ALUNOS):
-    alunos = spark.table(T_ALUNOS)
-    if "proficiencia_portugues" in alunos.columns:
-        alunos_ano = alunos.filter(F.col("ano") == ANO) if "ano" in alunos.columns else alunos
-        if UF_SELECIONADA != "Todas" and "sigla_uf" in alunos_ano.columns:
-            alunos_ano = alunos_ano.filter(F.col("sigla_uf") == UF_SELECIONADA)
+# A distribuição vem da GOLD (mart 5), não da Bronze. As faixas e a classificação
+# pelo corte de 743 já foram aplicadas no grão de aluno pela Silver — aqui só se
+# somam contagens. Antes, este bloco reimplementava as faixas e o corte em cima
+# dos microdados crus, mantendo uma segunda definição da mesma regra de negócio.
+if table_exists(T_DISTRIBUICAO):
+    distribuicao = filtro_ano(spark.table(T_DISTRIBUICAO))
+    if UF_SELECIONADA != "Todas":
+        distribuicao = distribuicao.filter(F.col("sigla_uf") == UF_SELECIONADA)
 
-        faixas_alunos = (
-            alunos_ano
-            .withColumn(
-                "faixa_proficiencia",
-                F.when(F.col("proficiencia_portugues") < 650, "1 · Abaixo de 650")
-                .when(F.col("proficiencia_portugues") < 700, "2 · 650 a 699")
-                .when(F.col("proficiencia_portugues") < 743, "3 · 700 a 742")
-                .when(F.col("proficiencia_portugues") < 800, "4 · 743 a 799")
-                .otherwise("5 · 800 ou mais"),
-            )
-            .withColumn(
-                "classificacao",
-                F.when(F.col("proficiencia_portugues") >= 743, "Alfabetizado")
-                .otherwise("Abaixo do corte"),
-            )
-            .groupBy("faixa_proficiencia", "classificacao")
-            .agg(
-                F.count("*").alias("alunos"),
-                F.round(F.avg("proficiencia_portugues"), 1).alias("proficiencia_media"),
-            )
-            .orderBy("faixa_proficiencia")
+    faixas_alunos = (
+        distribuicao
+        .withColumn(
+            "classificacao",
+            F.when(F.col("faixa_label") >= "4", "Alfabetizado").otherwise("Abaixo do corte"),
         )
-        display(faixas_alunos)
+        .groupBy(F.col("faixa_label").alias("faixa_proficiencia"), "classificacao")
+        .agg(
+            F.sum("alunos").alias("alunos"),
+            # média ponderada: cada faixa contribui na proporção dos seus alunos —
+            # tirar média das médias daria peso igual a faixas de tamanhos diferentes
+            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
+                    / F.sum("alunos"), 1).alias("proficiencia_media"),
+        )
+        .orderBy("faixa_proficiencia")
+    )
+    display(faixas_alunos)
 
-        resumo_alunos = (
-            alunos_ano
-            .groupBy("ano", "rede")
-            .agg(
-                F.count("*").alias("alunos"),
-                F.round(
-                    F.avg(
-                        F.when(F.col("proficiencia_portugues") >= 743, 1.0).otherwise(0.0)
-                    ) * 100,
-                    1,
-                ).alias("pct_alfabetizados"),
-                F.round(F.avg("proficiencia_portugues"), 1).alias("proficiencia_media"),
-            )
-            .withColumn(
-                "rede_label",
-                F.when(F.col("rede") == 0, "total")
-                .when(F.col("rede") == 2, "estadual")
-                .when(F.col("rede") == 3, "municipal")
-                .when(F.col("rede") == 5, "privada")
-                .otherwise(F.concat(F.lit("rede "), F.col("rede"))),
-            )
-            .select("ano", "rede_label", "alunos", "pct_alfabetizados", "proficiencia_media")
-            .orderBy("ano", F.desc("pct_alfabetizados"))
+    resumo_alunos = (
+        distribuicao
+        .groupBy("ano", "rede_label")
+        .agg(
+            F.sum("alunos").alias("alunos"),
+            F.round(F.sum("alunos_alfabetizados") / F.sum("alunos") * 100, 1)
+             .alias("pct_alfabetizados"),
+            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
+                    / F.sum("alunos"), 1).alias("proficiencia_media"),
         )
-        display(resumo_alunos)
-    else:
-        print("⚠ bronze.alunos não contém a coluna proficiencia_portugues.")
+        .select("ano", "rede_label", "alunos", "pct_alfabetizados", "proficiencia_media")
+        .orderBy("ano", F.desc("pct_alfabetizados"))
+    )
+    display(resumo_alunos)
 else:
-    print("⚠ bronze.alunos ainda não existe. A visão de 743 pontos ficará indisponível.")
+    print("⚠ gold.distribuicao_proficiencia ainda não existe. Execute os notebooks 03 e 04 "
+          "com bronze.alunos disponível — a visão de 743 pontos ficará indisponível.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -1068,8 +1066,8 @@ donuts = (
     '<div style="display:flex;gap:26px;flex-wrap:wrap;justify-content:center">'
     + donut(pct_ufs_na_meta, "UFs na trajetória da meta", C_GREEN)
     + donut(pct_municipios_meta, "Municípios monitorados na meta", C_CYAN)
-    + donut(taxa_media_ufs, f"Resultado médio · {REDE_SELECIONADA} {ANO}", C_VIOLET)
-    + (donut(meta_nacional, f"Meta nacional {ANO}", C_AMBER) if meta_nacional else "")
+    + donut(taxa_media_ufs, f"Resultado médio · {REDE_SELECIONADA} {ANO_LABEL}", C_VIOLET)
+    + (donut(meta_nacional, f"Meta nacional {ANO_LABEL}", C_AMBER) if meta_nacional else "")
     + "</div>"
 )
 displayHTML(chart_box("Progresso rumo a 2030", "Visão de gauges — abertura da seção de resultados", donuts))
@@ -1100,7 +1098,7 @@ ranking_html = "".join(bars) + legend(
     [(s, c) for s, c in STATUS_COLORS.items()] + [("│ marcador = meta da UF", C_TEXT)]
 )
 displayHTML(chart_box(
-    f"Ranking das UFs — Indicador Criança Alfabetizada · {REDE_SELECIONADA} {ANO}",
+    f"Ranking das UFs — Indicador Criança Alfabetizada · {REDE_SELECIONADA} {ANO_LABEL}",
     "Barra = resultado · marcador branco = meta do ano · cor = status da trajetória",
     ranking_html,
 ))
@@ -1164,7 +1162,7 @@ if mp:
                    f'y="{py(float(r["variacao_pp"])) - raio - 4:.0f}" fill="{C_TEXT}" '
                    f'font-size="11" font-weight="700" text-anchor="middle">{r["sigla_uf"]}</text>')
     pts.append(f'<text x="{W / 2:.0f}" y="{H - 12}" fill="{C_MUTED}" font-size="11" '
-               f'text-anchor="middle">Resultado {ANO} (%)</text>')
+               f'text-anchor="middle">Resultado {ANO_LABEL} (%)</text>')
     pts.append(f'<text x="16" y="{H / 2:.0f}" fill="{C_MUTED}" font-size="11" '
                f'transform="rotate(-90 16 {H / 2:.0f})" text-anchor="middle">Variação vs ano anterior (p.p.)</text>')
     pts.append("</svg>")
@@ -1173,17 +1171,21 @@ if mp:
         "Tamanho da bolha = score de prioridade · quadrante inferior-esquerdo = agir primeiro",
         "".join(pts) + legend(list(STATUS_COLORS.items())),
     ))
+elif TODOS_OS_ANOS:
+    print("Matriz de prioridade indisponível: o eixo de evolução compara um ano com o "
+          "anterior, e o recorte atual é a média do período. Selecione um ano específico.")
 else:
     print("Sem ano anterior no recorte para montar a matriz.")
 
 # COMMAND ----------
 # ---- Gráfico 4 · Distribuição dos alunos e a linha de corte 743 (SIMULADO) ----
-if table_exists(T_ALUNOS):
+# Histograma servido pelo mart 5: as faixas de 25 pontos já vêm agregadas da Gold.
+if table_exists(T_DISTRIBUICAO):
     dist = (
-        spark.table(T_ALUNOS)
-        .filter(F.col("ano") == ANO)
-        .withColumn("faixa", (F.floor(F.col("proficiencia_portugues") / 25) * 25).cast("int"))
-        .groupBy("faixa").count().orderBy("faixa").collect()
+        filtro_ano(spark.table(T_DISTRIBUICAO))
+        .groupBy(F.col("faixa_pontos").alias("faixa"))
+        .agg(F.sum("alunos").alias("count"))
+        .orderBy("faixa").collect()
     )
     if dist:
         max_n = max(r["count"] for r in dist)
@@ -1219,7 +1221,7 @@ if table_exists(T_ALUNOS):
                       ("abaixo do corte", "rgba(255,255,255,.28)")])
         )
         displayHTML(chart_box(
-            f"Distribuição de proficiência dos alunos · {ANO} (dados SIMULADOS)",
+            f"Distribuição de proficiência dos alunos · {ANO_LABEL} (dados SIMULADOS)",
             "Histograma por faixa de 25 pontos na escala Saeb — a linha vermelha é a regra oficial dos 743 pontos",
             body,
         ))
