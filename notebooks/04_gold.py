@@ -3,22 +3,23 @@
 # MAGIC # 04 — Gold
 # MAGIC Cria os marts analíticos após aprovação do Quality Gate (notebook 06).
 # MAGIC
-# MAGIC **A Gold lê exclusivamente da Silver aprovada** (arquitetura Medalhão:
-# MAGIC nenhuma leitura direta da Bronze). Metas e dimensões já chegam integradas
-# MAGIC pela Silver (notebook 03). Todos os marts carregam `fonte_dados` para
-# MAGIC distinguir dado oficial do INEP de eventos do simulador.
+# MAGIC A Gold lê exclusivamente da Silver aprovada, sem leitura direta da Bronze.
+# MAGIC Metas e dimensões chegam integradas pela Silver (notebook 03). Todos os marts
+# MAGIC carregam `fonte_dados`, que distingue o dado oficial do INEP dos eventos do
+# MAGIC simulador.
 # MAGIC
 # MAGIC Marts publicados:
-# MAGIC 1. `gold.indicador_municipio` — grão: `ano + id_municipio + rede`
+# MAGIC 1. `gold.indicador_municipio` — grão: `ano + id_municipio + rede + fonte`
 # MAGIC 2. `gold.resumo_uf` — grão: `ano + sigla_uf + rede`
-# MAGIC 3. `gold.meta_vs_resultado` — grão: `ano + território + rede` (UF e município)
+# MAGIC 3. `gold.meta_vs_resultado` — grão: `ano + território + rede + fonte`
 # MAGIC 4. `gold.evolucao_temporal` — grão: `ano + território + rede` (variação anual)
+# MAGIC 5. `gold.distribuicao_proficiencia` — grão: `ano + UF + rede + faixa`
 
 # COMMAND ----------
 CATALOG = "workspace"
 
-# A Gold lê da Silver APROVADA pelo Quality Gate (06). Se a tabela aprovada
-# ainda não existir (execução isolada), cai para a Silver bruta como fallback.
+# A Gold consome a Silver aprovada pelo Quality Gate (notebook 06). Em execução
+# isolada, sem a tabela aprovada, usa a Silver bruta como fallback.
 APROVADA = f"{CATALOG}.silver.medicoes_aprovadas"
 SOURCE = APROVADA if spark.catalog.tableExists(APROVADA) else f"{CATALOG}.silver.medicoes_alfabetizacao"
 print(f"Fonte da Gold: {SOURCE}")
@@ -26,20 +27,19 @@ print(f"Fonte da Gold: {SOURCE}")
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Mart 1 — indicador por município (grão: ano + id_municipio + rede + fonte)
-# MAGIC `fonte_dados` indica se a linha vem do INEP (oficial) ou do simulador.
+# MAGIC `fonte_dados` identifica a origem da linha (INEP ou simulador). Um município
+# MAGIC pode ter as duas origens no mesmo ano; ambas são mantidas para rastreabilidade
+# MAGIC e `fonte_preferencial` indica qual delas o consumidor deve usar.
 # MAGIC
-# MAGIC Um município pode ter as duas linhas no mesmo ano. Ambas são preservadas
-# MAGIC (rastreabilidade), e **`fonte_preferencial` elege a oficial**. O serving
-# MAGIC (notebook 05) depende disso: o upsert no MongoDB usa a chave
-# MAGIC `ano + id_municipio + rede`, mais estreita que o grão desta tabela — sem o
-# MAGIC filtro, as duas linhas colidem e uma sobrescreve a outra de forma não
-# MAGIC determinística. O ML (notebook 07) também filtra, para não treinar duas
-# MAGIC vezes sobre o mesmo território.
+# MAGIC O serving (notebook 05) depende dessa flag: o upsert no MongoDB usa a chave
+# MAGIC `ano + id_municipio + rede`, mais estreita que o grão da tabela. Sem o filtro,
+# MAGIC as duas linhas colidem na mesma chave. O treino do modelo (notebook 07)
+# MAGIC também filtra, para não duplicar o mesmo território no dataset.
 
 # COMMAND ----------
 spark.sql(f"""
 CREATE OR REPLACE TABLE {CATALOG}.gold.indicador_municipio
-COMMENT 'Indicador por município. Grão: ano + id_municipio + rede + fonte. Use fonte_preferencial=true para uma linha por município. Responsável: P4.'
+COMMENT 'Indicador por município. Grão: ano + id_municipio + rede + fonte. Use fonte_preferencial=true para uma linha por município.'
 AS
 WITH base AS (
     SELECT
@@ -81,19 +81,18 @@ FROM priorizada
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Mart 2 — resumo por UF (grão: ano + sigla_uf + rede)
-# MAGIC Construído **exclusivamente sobre o dado OFICIAL do INEP** (grão UF),
-# MAGIC enriquecido com o agregado de alunos integrado na Silver.
+# MAGIC Construído exclusivamente sobre o dado oficial do INEP no grão UF, enriquecido
+# MAGIC com o agregado de alunos integrado na Silver.
 # MAGIC
-# MAGIC O recorte `grao = 'uf'` é essencial: sem ele, as medições de grão município
-# MAGIC (eventos simulados e indicador municipal) entram no resumo estadual e a taxa
-# MAGIC deixa de ser comparável à meta oficial. `municipios_cobertos` é métrica de
-# MAGIC **cobertura** e por isso vem de fora do agregado — as linhas de grão UF não
-# MAGIC têm `id_municipio`, e contá-los dentro do mesmo GROUP BY daria sempre zero.
+# MAGIC O recorte `grao = 'uf'` é necessário: sem ele, as medições de grão município
+# MAGIC entram no resumo estadual e a taxa deixa de ser comparável à meta oficial.
+# MAGIC `municipios_cobertos` é métrica de cobertura e é calculada fora do agregado,
+# MAGIC porque as linhas de grão UF não possuem `id_municipio`.
 
 # COMMAND ----------
 spark.sql(f"""
 CREATE OR REPLACE TABLE {CATALOG}.gold.resumo_uf
-COMMENT 'Resumo do indicador por UF (dado oficial INEP, grão uf). Grão: ano + sigla_uf + rede. Responsável: P4.'
+COMMENT 'Resumo do indicador por UF (dado oficial INEP, grão uf). Grão: ano + sigla_uf + rede.'
 AS
 WITH oficial AS (
     SELECT
@@ -113,8 +112,8 @@ WITH oficial AS (
     WHERE grao = 'uf' AND fonte_dados = 'oficial_inep'
     GROUP BY ano, sigla_uf, nome_uf, regiao, rede, rede_label, fonte_dados
 ),
--- Quantos municípios da UF têm medição, independentemente da origem. É cobertura
--- do pipeline, não insumo do indicador: não entra na taxa.
+-- Municípios da UF com medição, independentemente da origem. Mede cobertura do
+-- pipeline e não compõe a taxa.
 cobertura AS (
     SELECT
         ano,
@@ -136,18 +135,18 @@ LEFT JOIN cobertura c
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Mart 3 — meta versus resultado (grão: ano + território + rede + fonte)
-# MAGIC As metas já foram integradas na Silver (notebook 03) via join com
-# MAGIC `bronze.meta_uf` / `bronze.meta_municipio` — a Gold **não lê a Bronze**.
-# MAGIC O mart cobre os dois grãos: UF (dado oficial) e município.
+# MAGIC As metas foram integradas na Silver (notebook 03) por join com
+# MAGIC `bronze.meta_uf` e `bronze.meta_municipio`. A Gold não lê a Bronze. O mart
+# MAGIC cobre os dois grãos: UF (dado oficial) e município.
 # MAGIC
-# MAGIC Como no Mart 1, `fonte_preferencial` elege a linha oficial quando o mesmo
-# MAGIC território tem também medição simulada. Quem tirar média sem esse filtro
-# MAGIC mistura dado real com simulado.
+# MAGIC Como no Mart 1, `fonte_preferencial` indica a linha oficial quando o mesmo
+# MAGIC território também possui medição simulada. Agregar sem esse filtro mistura as
+# MAGIC duas origens.
 
 # COMMAND ----------
 spark.sql(f"""
 CREATE OR REPLACE TABLE {CATALOG}.gold.meta_vs_resultado
-COMMENT 'Resultado observado x meta, por UF (oficial) e por município. Grão: ano + território + rede + fonte. Use fonte_preferencial=true para uma linha por território. Responsável: P4.'
+COMMENT 'Resultado observado x meta, por UF (oficial) e por município. Grão: ano + território + rede + fonte. Use fonte_preferencial=true para uma linha por território.'
 AS
 WITH base AS (
     SELECT
@@ -234,25 +233,23 @@ evolucao_temporal = (
     .saveAsTable(f"{CATALOG}.gold.evolucao_temporal"))
 
 spark.sql(f"COMMENT ON TABLE {CATALOG}.gold.evolucao_temporal IS "
-          f"'Variação da taxa ano a ano por UF e município. Grão: ano + território + rede. Responsável: P4.'")
+          f"'Variação da taxa ano a ano por UF e município. Grão: ano + território + rede.'")
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Mart 5 — distribuição de proficiência (grão: ano + UF + rede + faixa)
-# MAGIC Agrega `silver.alunos_aprovados` (grão de aluno) nas faixas usadas pelo
-# MAGIC painel. Existe para que o dashboard **não precise ler a Bronze** para montar
-# MAGIC a curva em torno do corte de 743.
+# MAGIC Agrega `silver.alunos_aprovados` nas faixas usadas pelo painel, para que o
+# MAGIC dashboard não precise ler a Bronze ao montar a curva em torno do corte de 743.
 # MAGIC
-# MAGIC Duas faixas convivem de propósito: `faixa_pontos` (blocos de 25 pontos, para
-# MAGIC o histograma) e `faixa_label` (bandas de leitura executiva). A segunda **não**
-# MAGIC é derivável da primeira — o corte de 743 cai dentro do bloco 725–749 —, por
-# MAGIC isso as duas entram no grão.
+# MAGIC A tabela mantém duas faixas: `faixa_pontos` (blocos de 25 pontos, usada no
+# MAGIC histograma) e `faixa_label` (bandas de leitura executiva). A segunda não é
+# MAGIC derivável da primeira, porque o corte de 743 cai dentro do bloco 725–749.
 # MAGIC
-# MAGIC Dado SIMULADO: `fonte_dados` acompanha o registro até o painel.
+# MAGIC Os dados são simulados e `fonte_dados` acompanha o registro até o painel.
 
 # COMMAND ----------
-# Mesma regra do mart principal: a Gold consome a Silver APROVADA pelo Gate (06).
-# Sem a aprovada (execução isolada), cai para a Silver bruta.
+# Como nos demais marts, a Gold consome a Silver aprovada pelo Quality Gate
+# (notebook 06), com fallback para a Silver bruta em execução isolada.
 ALUNOS_APROVADOS = f"{CATALOG}.silver.alunos_aprovados"
 ALUNOS_BRUTA = f"{CATALOG}.silver.alunos_proficiencia"
 ALUNOS_SILVER = (ALUNOS_APROVADOS if spark.catalog.tableExists(ALUNOS_APROVADOS)
@@ -262,7 +259,7 @@ if spark.catalog.tableExists(ALUNOS_SILVER):
     print(f"Fonte do mart de distribuição: {ALUNOS_SILVER}")
     spark.sql(f"""
     CREATE OR REPLACE TABLE {CATALOG}.gold.distribuicao_proficiencia
-    COMMENT 'Distribuição de proficiência dos alunos por faixa (dados SIMULADOS). Grão: ano + sigla_uf + rede + faixa. Responsável: P4.'
+    COMMENT 'Distribuição de proficiência dos alunos por faixa (dados SIMULADOS). Grão: ano + sigla_uf + rede + faixa.'
     AS
     SELECT
         ano,
@@ -294,10 +291,10 @@ if spark.catalog.tableExists(ALUNOS_SILVER):
                  ELSE '5 · 800 ou mais'
              END
     """)
-    print("✓ gold.distribuicao_proficiencia publicada")
+    print("gold.distribuicao_proficiencia publicada")
 else:
-    print(f"⚠ {ALUNOS_BRUTA} não existe — mart de distribuição não publicado "
-          "(rode o notebook 03 com bronze.alunos disponível).")
+    print(f"AVISO: {ALUNOS_BRUTA} não existe. O mart de distribuição não será "
+          "publicado. Execute o notebook 03 com bronze.alunos disponível.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -307,14 +304,14 @@ else:
 for mart in ["indicador_municipio", "resumo_uf", "meta_vs_resultado", "evolucao_temporal",
              "distribuicao_proficiencia"]:
     if not spark.catalog.tableExists(f"{CATALOG}.gold.{mart}"):
-        print(f"⚠ gold.{mart} não publicada")
+        print(f"AVISO: gold.{mart} não publicada")
         continue
     df = spark.table(f"{CATALOG}.gold.{mart}")
     n = df.count()
     if "fonte_dados" in df.columns:
         oficiais = df.filter(F.col("fonte_dados") == "oficial_inep").count()
-        print(f"✓ gold.{mart}: {n:,} linhas ({oficiais:,} de fonte oficial INEP)")
+        print(f"gold.{mart}: {n:,} linhas ({oficiais:,} de fonte oficial INEP)")
     else:
-        print(f"✓ gold.{mart}: {n:,} linhas")
+        print(f"gold.{mart}: {n:,} linhas")
 
 print("Gold publicada com grão documentado e origem do dado identificada.")

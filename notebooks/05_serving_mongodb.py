@@ -4,7 +4,7 @@
 # MAGIC Publica a Gold no MongoDB Atlas com **upsert** por município (um documento
 # MAGIC por `ano + id_municipio + rede`), sem apagar a coleção inteira.
 # MAGIC
-# MAGIC Pré-requisito: o P1 cria o cluster Atlas M0 e cadastra o secret:
+# MAGIC Pré-requisito: cluster Atlas M0 provisionado e secret cadastrado:
 # MAGIC ```
 # MAGIC databricks secrets create-scope alfabetizacao
 # MAGIC databricks secrets put-secret alfabetizacao mongo_uri
@@ -32,8 +32,8 @@ MONGO_URI = None
 try:
     MONGO_URI = dbutils.secrets.get(scope="alfabetizacao", key="mongo_uri")
 except Exception as exc:
-    print(f"⚠ Secret alfabetizacao/mongo_uri não encontrado: {exc}")
-    print("Configure o secret (P1) para habilitar a publicação no MongoDB.")
+    print(f"AVISO: secret alfabetizacao/mongo_uri não encontrado: {exc}")
+    print("Configure o secret para habilitar a publicação no MongoDB.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -67,10 +67,10 @@ def make_writer(mongo_uri, database, collection):
 # COMMAND ----------
 if MONGO_URI:
     # A chave do upsert (ano + id_municipio + rede) é mais estreita que o grão da
-    # Gold, que também separa por `fonte_dados`. Sem o filtro, o mesmo município
-    # teria a linha oficial e a simulada disputando o mesmo documento, e a última
-    # partição a escrever venceria — de forma não determinística. A Gold já elegeu
-    # a melhor fonte por município (notebook 04): publicamos só a preferencial.
+    # Gold, que também separa por `fonte_dados`. Sem o filtro, a linha oficial e a
+    # simulada do mesmo município disputam o mesmo documento e o resultado depende
+    # da ordem de escrita das partições. A Gold já indica a fonte preferencial por
+    # município (notebook 04); apenas ela é publicada.
     df = spark.table(SOURCE).filter(F.col("fonte_preferencial"))
     total = df.count()
 
@@ -82,7 +82,7 @@ if MONGO_URI:
         )
 
     df.foreachPartition(make_writer(MONGO_URI, DATABASE, COLLECTION))
-    print(f"✓ {total:,} documentos publicados/atualizados em {DATABASE}.{COLLECTION}")
+    print(f"{total:,} documentos publicados/atualizados em {DATABASE}.{COLLECTION}")
 
     # Verificação idempotente: nº de documentos na coleção (executa no driver)
     from pymongo import MongoClient

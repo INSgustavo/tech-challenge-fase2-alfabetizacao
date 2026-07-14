@@ -21,8 +21,8 @@ import uuid
 from datetime import datetime, timezone
 from pyspark.sql import functions as F
 
-# Corte de alfabetização compartilhado em src/ — o Gate valida a regra contra a
-# mesma constante que a Silver aplicou, não contra um 743 digitado de novo aqui.
+# Corte de alfabetização importado de src/, para que o Gate valide a regra contra
+# a mesma constante aplicada pela Silver.
 try:
     sys.path.append("..")
     from src.utils import ALFABETIZACAO_CORTE
@@ -74,7 +74,7 @@ if spark.catalog.tableExists(DIM_MUN):
                    .withColumn("_fk_municipio_ok", F.lit(True)))
     s = s.join(ids_validos, on="id_municipio", how="left")
 else:
-    print(f"⚠ {DIM_MUN} não existe — check de FK municipal não aplicado.")
+    print(f"AVISO: {DIM_MUN} não existe. Check de FK municipal não aplicado.")
     s = s.withColumn("_fk_municipio_ok", F.lit(True))
 
 if spark.catalog.tableExists(DIM_UF):
@@ -84,12 +84,12 @@ if spark.catalog.tableExists(DIM_UF):
                .withColumn("_fk_uf_ok", F.lit(True)))
     s = s.join(ufs_dim, on="sigla_uf", how="left")
 else:
-    print(f"⚠ {DIM_UF} não existe — check de FK de UF não aplicado.")
+    print(f"AVISO: {DIM_UF} não existe. Check de FK de UF não aplicado.")
     s = s.withColumn("_fk_uf_ok", F.lit(True))
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 1. Validações por registro → motivo de rejeição
+# MAGIC ## 1. Validações por registro e motivo de rejeição
 # MAGIC A primeira regra violada define o `rejection_reason` do registro.
 
 # COMMAND ----------
@@ -110,13 +110,14 @@ rejection_reason = (
     .when(~F.col("rede").isin([0, 2, 3, 5]), F.lit("rede_fora_do_dominio"))
     .when(F.col("taxa_alfabetizacao").isNotNull()
           & ~F.col("taxa_alfabetizacao").between(0.0, 1.0), F.lit("taxa_fora_do_dominio"))
-    # A meta passa pela mesma régua do resultado: as duas são comparadas entre si
-    # na Gold, e uma meta em percentual (0-100) que escapasse da normalização da
-    # Silver produziria um gap absurdo sem disparar erro nenhum.
+    # A meta é validada no mesmo domínio do resultado, já que a Gold compara as
+    # duas. Uma meta em percentual (0-100) que escape da normalização da Silver
+    # produziria um gap incorreto sem gerar erro.
     .when(F.col("meta_taxa").isNotNull()
           & ~F.col("meta_taxa").between(0.0, 1.0), F.lit("meta_fora_do_dominio"))
-    # Domínios que os marts e o dashboard usam como chave de decisão: um valor
-    # inesperado aqui não quebra o pipeline, ele corrompe a leitura em silêncio.
+    # `grao` e `fonte_dados` são usados como critério de filtro pelos marts e pelo
+    # dashboard. Um valor fora do domínio não interrompe o pipeline, mas altera o
+    # resultado das agregações.
     .when(F.col("grao").isNull() | ~F.col("grao").isin(["uf", "municipio"]),
           F.lit("grao_invalido"))
     .when(F.col("fonte_dados").isNull()
@@ -160,9 +161,9 @@ if rows_rejected > 0:
     )
     (quarentena.write.format("delta").mode("append")
         .saveAsTable(f"{CATALOG}.observability.quarantine_records"))
-    print(f"→ {rows_rejected:,} registros enviados para observability.quarantine_records")
+    print(f"{rows_rejected:,} registros enviados para observability.quarantine_records")
 
-    # Distribuição dos motivos, útil na demo
+    # Distribuição dos motivos de rejeição.
     invalidos.groupBy("rejection_reason").count().orderBy(F.desc("count")).show(truncate=False)
 else:
     print("Nenhum registro reprovado por regra de linha.")
@@ -176,23 +177,24 @@ else:
     .mode("overwrite").option("overwriteSchema", "true")
     .saveAsTable(APROVADA))
 spark.sql(f"COMMENT ON TABLE {APROVADA} IS "
-          f"'Silver aprovada pelo Quality Gate (06). Fonte da Gold. Responsável: P4.'")
-print(f"✓ {APROVADA} publicada com {rows_written:,} registros")
+          f"'Silver aprovada pelo Quality Gate (06). Fonte da Gold.'")
+print(f"{APROVADA} publicada com {rows_written:,} registros")
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## 3b. Quality Gate da Silver de alunos (`silver.alunos_proficiencia`)
-# MAGIC Mesmo padrão da tabela de medições: reprovados vão para a quarentena e os
-# MAGIC aprovados são publicados em `silver.alunos_aprovados`, fonte do mart
-# MAGIC `gold.distribuicao_proficiencia`. O DoD da Gold (contrato, seção 11) exige
-# MAGIC Quality Gate aprovado — isso vale para **toda** tabela que alimenta um mart.
+# MAGIC Segue o mesmo padrão da tabela de medições: os reprovados vão para a
+# MAGIC quarentena e os aprovados são publicados em `silver.alunos_aprovados`, fonte
+# MAGIC do mart `gold.distribuicao_proficiencia`. O Definition of Done da Gold
+# MAGIC (contrato, seção 11) exige Quality Gate aprovado para toda tabela que alimenta
+# MAGIC um mart.
 
 # COMMAND ----------
 ALUNOS_SILVER = f"{CATALOG}.silver.alunos_proficiencia"
 ALUNOS_APROVADOS = f"{CATALOG}.silver.alunos_aprovados"
 
-# Domínio da escala de proficiência do Saeb. Um valor fora daqui não é um aluno
-# com desempenho extremo — é erro de unidade ou de parsing.
+# Domínio da escala de proficiência do Saeb. Valores fora deste intervalo indicam
+# erro de unidade ou de parsing, não desempenho extremo.
 PROFICIENCIA_MIN, PROFICIENCIA_MAX = 0.0, 1000.0
 
 alunos_rejeitados = 0
@@ -209,10 +211,10 @@ if spark.catalog.tableExists(ALUNOS_SILVER):
         .when(F.col("proficiencia_portugues").isNotNull()
               & ~F.col("proficiencia_portugues").between(PROFICIENCIA_MIN, PROFICIENCIA_MAX),
               F.lit("aluno_proficiencia_fora_do_dominio"))
-        # Coerência da regra de negócio: `alfabetizado` TEM que ser o resultado do
-        # corte aplicado à proficiência do próprio registro. Se divergir, a regra
-        # mudou em algum lugar sem versionar — exatamente o que o contrato (seção 4)
-        # quer evitar ao exigir alfabetizacao_rule_version.
+        # Coerência da regra de negócio: `alfabetizado` deve corresponder ao corte
+        # aplicado à proficiência do próprio registro. Divergência indica que a regra
+        # foi alterada sem versionamento, situação que o contrato (seção 4) pretende
+        # evitar ao exigir `alfabetizacao_rule_version`.
         .when(F.col("proficiencia_portugues").isNotNull()
               & (F.col("alfabetizado")
                  != (F.col("proficiencia_portugues") >= ALFABETIZACAO_CORTE)),
@@ -244,13 +246,13 @@ if spark.catalog.tableExists(ALUNOS_SILVER):
         .option("overwriteSchema", "true").saveAsTable(ALUNOS_APROVADOS))
     spark.sql(f"COMMENT ON TABLE {ALUNOS_APROVADOS} IS "
               "'Alunos aprovados pelo Quality Gate (06). Fonte da "
-              "gold.distribuicao_proficiencia. Responsável: P4.'")
+              "gold.distribuicao_proficiencia.'")
 
     alunos_id_unico = alunos_aprovados_n == a_aprovados.select("record_id").distinct().count()
-    print(f"✓ {ALUNOS_APROVADOS}: {alunos_aprovados_n:,} aprovados "
-          f"| {alunos_rejeitados:,} em quarentena (de {alunos_lidos:,} lidos)")
+    print(f"{ALUNOS_APROVADOS}: {alunos_aprovados_n:,} aprovados | "
+          f"{alunos_rejeitados:,} em quarentena (de {alunos_lidos:,} lidos)")
 else:
-    print(f"⚠ {ALUNOS_SILVER} não existe — gate de alunos não aplicado.")
+    print(f"AVISO: {ALUNOS_SILVER} não existe. Gate de alunos não aplicado.")
     alunos_id_unico = True
 
 # COMMAND ----------
@@ -262,14 +264,13 @@ else:
 record_id_unico = rows_written == aprovados.select("record_id").distinct().count()
 cobertura = (rows_written / rows_read) if rows_read else 0.0
 
-# Integridade das metas: se a Bronze publica meta para (ano, UF), o fato daquele
-# (ano, UF) TEM que tê-la recebido na Silver. Um `meta_taxa` nulo aqui não é
-# ausência de meta — é falha de chave no join, e a Gold publicaria "Meta
-# indisponível" para uma UF que na verdade tem meta.
+# Integridade das metas: se a Bronze publica meta para um par (ano, UF), o fato
+# correspondente deve tê-la recebido na Silver. Um `meta_taxa` nulo nesse caso
+# indica falha de chave no join, e não ausência de meta na fonte.
 #
-# O join é por (ano, sigla_uf), e não só por ano, de propósito: DF e RR não existem
-# na fonte do INEP e por isso não têm meta nenhuma. Cobrar meta deles reprovaria o
-# Gate por um buraco da fonte, não por um defeito do pipeline.
+# O join usa (ano, sigla_uf) e não apenas o ano porque DF e RR não constam da fonte
+# do INEP e, portanto, não possuem meta. Exigir meta para essas UFs reprovaria o
+# Gate por uma lacuna da fonte.
 META_UF = f"{CATALOG}.bronze.meta_uf"
 if spark.catalog.tableExists(META_UF):
     chaves_com_meta = (
@@ -284,11 +285,11 @@ if spark.catalog.tableExists(META_UF):
     )
     n_metas_perdidas = metas_perdidas.count()
     if n_metas_perdidas:
-        print(f"✗ {n_metas_perdidas:,} fatos perderam a meta no join da Silver:")
+        print(f"FALHA: {n_metas_perdidas:,} fatos perderam a meta no join da Silver:")
         (metas_perdidas.groupBy("ano", "sigla_uf", "grao").count()
          .orderBy(F.desc("count")).show(10, truncate=False))
 else:
-    print(f"⚠ {META_UF} não existe — check de integridade das metas não aplicado.")
+    print(f"AVISO: {META_UF} não existe. Check de integridade das metas não aplicado.")
     n_metas_perdidas = 0
 
 checks_sistemicos = {
@@ -301,7 +302,7 @@ checks_sistemicos = {
 }
 
 for nome, ok in checks_sistemicos.items():
-    print(f"{'✓' if ok else '✗'} {nome}")
+    print(f"[{'OK' if ok else 'FALHA'}] {nome}")
 print(f"Cobertura: {cobertura:.1%}")
 
 reprovados = [nome for nome, ok in checks_sistemicos.items() if not ok]
@@ -323,8 +324,8 @@ metric = Row(
     finished_at=datetime.now(timezone.utc),
     rows_read=int(rows_read),
     rows_written=int(rows_written),
-    # Inclui os alunos reprovados: a auditoria tem que refletir tudo que a task
-    # mandou para a quarentena, senão o número não bate com a tabela.
+    # Inclui os alunos reprovados, para que a auditoria reflita o total enviado à
+    # quarentena pela task e o número reconcilie com a tabela.
     rows_rejected=int(rows_rejected + alunos_rejeitados),
     max_event_time=None,
     schema_version="1.0",

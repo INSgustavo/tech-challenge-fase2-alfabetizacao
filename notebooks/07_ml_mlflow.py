@@ -1,13 +1,13 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 07 — Aplicação em IA (P4) — MLflow
-# MAGIC Modelo de regressão que prevê a **taxa de alfabetização** de um município a
-# MAGIC partir de atributos estruturais (ano, UF, rede). Compara um **baseline**
-# MAGIC (média) com um modelo real e registra tudo no MLflow.
+# MAGIC # 07 — Aplicação em IA — MLflow
+# MAGIC Modelo de regressão que estima a taxa de alfabetização de um município a
+# MAGIC partir de atributos estruturais (ano, UF, rede). Compara um baseline (média
+# MAGIC global), o modelo e a média de grupo, registrando as três execuções no MLflow.
 # MAGIC
-# MAGIC > Observação honesta: `media_portugues` e `pct_registros_alfabetizados` são
-# MAGIC > derivados da mesma medição do alvo, então **não** são usados como features
-# MAGIC > (seria vazamento). Ver limitações no model card no fim do notebook.
+# MAGIC `media_portugues` e `pct_registros_alfabetizados` são derivados da mesma
+# MAGIC medição do alvo e não são usados como features, para evitar vazamento. As
+# MAGIC demais limitações estão no model card, ao final do notebook.
 
 # COMMAND ----------
 CATALOG = "workspace"
@@ -27,13 +27,13 @@ from sklearn.preprocessing import OneHotEncoder
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 1. Montagem do dataset (Gold → pandas)
+# MAGIC ## 1. Montagem do dataset (Gold para pandas)
 
 # COMMAND ----------
-# `fonte_preferencial` mantém uma linha por município: a Gold guarda a medição
-# oficial e a do simulador lado a lado, e treinar sobre as duas duplicaria o mesmo
-# território no dataset — inflando o peso dos municípios com dupla origem e
-# vazando a mesma informação entre treino e teste.
+# `fonte_preferencial` garante uma linha por município. A Gold mantém a medição
+# oficial e a simulada lado a lado; treinar sobre as duas duplicaria o mesmo
+# território no dataset, aumentando o peso dos municípios com dupla origem e
+# permitindo que a mesma informação apareça no treino e no teste.
 pdf = (
     spark.table(f"{CATALOG}.gold.indicador_municipio")
     .filter(F.col("fonte_preferencial"))
@@ -54,7 +54,7 @@ y = pdf[TARGET]
 if len(pdf) >= 10:
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 else:
-    print("⚠ Poucos registros: treinando e avaliando no mesmo conjunto (apenas demonstração).")
+    print("AVISO: poucos registros. Treino e avaliação no mesmo conjunto, apenas para demonstração.")
     X_train, X_test, y_train, y_test = X, X, y, y
 
 # COMMAND ----------
@@ -116,17 +116,56 @@ with mlflow.start_run(run_name="random_forest") as run_rf:
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 5. Comparação baseline x modelo
+# MAGIC ## 4b. Referência — média de grupo (ano + UF + rede)
+# MAGIC Com features apenas no nível de UF, rede e ano, o limite superior de qualquer
+# MAGIC modelo é prever a média do grupo, já que não há informação para distinguir
+# MAGIC municípios dentro de um mesmo grupo. Esta referência mede esse limite: se o
+# MAGIC modelo não a supera, não está agregando capacidade preditiva.
+
+# COMMAND ----------
+with mlflow.start_run(run_name="referencia_media_grupo"):
+    medias_grupo = y_train.groupby(
+        [X_train["ano"], X_train["sigla_uf"], X_train["rede"]]
+    ).mean()
+    media_global = y_train.mean()
+    pred_grupo = np.array([
+        medias_grupo.get((ano, uf, rede), media_global)
+        for ano, uf, rede in zip(X_test["ano"], X_test["sigla_uf"], X_test["rede"])
+    ])
+    metrics_grupo = {
+        "mae": float(mean_absolute_error(y_test, pred_grupo)),
+        "rmse": float(np.sqrt(mean_squared_error(y_test, pred_grupo))),
+        "r2": float(r2_score(y_test, pred_grupo)) if len(y_test) > 1 else float("nan"),
+    }
+    mlflow.log_param("modelo", "media_grupo_ano_uf_rede")
+    mlflow.log_param("n_treino", len(X_train))
+    mlflow.log_metrics(metrics_grupo)
+    print("Média de grupo:", metrics_grupo)
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 5. Comparação entre baseline, modelo e referência
 
 # COMMAND ----------
 comparacao = pd.DataFrame([
     {"modelo": "baseline_media", **metrics_base},
     {"modelo": "random_forest", **metrics_rf},
+    {"modelo": "media_grupo_ano_uf_rede", **metrics_grupo},
 ])
 print(comparacao.to_string(index=False))
 
-melhor = "random_forest" if metrics_rf["mae"] <= metrics_base["mae"] else "baseline_media"
-print(f"\nMelhor modelo por MAE: {melhor}")
+melhor = comparacao.loc[comparacao["mae"].idxmin(), "modelo"]
+print(f"\nMelhor por MAE: {melhor}")
+if metrics_grupo["mae"] <= metrics_rf["mae"]:
+    print("A média de grupo empata ou supera o Random Forest. Com as features "
+          "atuais, o modelo não agrega capacidade preditiva sobre uma agregação "
+          "simples. O ganho depende de features no grão de município (ver model card).")
+
+# Dispersão intra-grupo: parcela da variação que as features atuais não explicam.
+intra = pdf.groupby(["ano", "sigla_uf", "rede"])[TARGET].std().dropna()
+print(f"\nDesvio-padrão médio dentro de cada grupo (ano, UF, rede): "
+      f"{intra.mean()*100:.1f} p.p. Corresponde à variação entre municípios do mesmo "
+      "grupo, não observável pelo modelo atual.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -146,24 +185,37 @@ estruturais (ano, UF, rede de ensino).
 ## Features
 - Categóricas: {FEATURES_CAT} (one-hot).
 - Numéricas: {FEATURES_NUM}.
-- **Excluídas de propósito** (vazamento): `media_portugues`,
-  `pct_registros_alfabetizados` — derivadas do próprio alvo.
+- Excluídas por risco de vazamento: `media_portugues` e
+  `pct_registros_alfabetizados`, ambas derivadas do próprio alvo.
 
 ## Métricas (conjunto de teste)
-- Baseline (média): MAE={metrics_base['mae']:.4f} | RMSE={metrics_base['rmse']:.4f} | R2={metrics_base['r2']:.4f}
-- RandomForest:      MAE={metrics_rf['mae']:.4f} | RMSE={metrics_rf['rmse']:.4f} | R2={metrics_rf['r2']:.4f}
+- Baseline (média global): MAE={metrics_base['mae']:.4f} | RMSE={metrics_base['rmse']:.4f} | R2={metrics_base['r2']:.4f}
+- RandomForest:            MAE={metrics_rf['mae']:.4f} | RMSE={metrics_rf['rmse']:.4f} | R2={metrics_rf['r2']:.4f}
+- Média de grupo (teto):   MAE={metrics_grupo['mae']:.4f} | RMSE={metrics_grupo['rmse']:.4f} | R2={metrics_grupo['r2']:.4f}
 - Melhor por MAE: {melhor}
 
+## Interpretação
+- Com features apenas no nível de UF, rede e ano, o limite superior do modelo é a
+  média de grupo: não há informação para distinguir municípios dentro do mesmo
+  grupo, onde se concentra a maior parte da variação (desvio-padrão intra-grupo na
+  ordem de dezenas de pontos percentuais).
+- Caso a média de grupo empate ou supere o RandomForest, o modelo não agrega
+  capacidade preditiva. O entregável, nesse cenário, é a infraestrutura de
+  experimentação (pipeline, MLflow, comparação com referência), não um preditor
+  aplicável a municípios.
+
 ## Limitações e riscos
-- Amostra pequena e majoritariamente em grão de UF na fonte atual: o modelo é
-  uma **prova de conceito**, não deve subsidiar decisões reais ainda.
-- Sem enriquecimento socioeconômico (IBGE/Censo/FUNDEB), o poder preditivo é
-  limitado a sinais estruturais.
-- Risco de viés territorial: UFs com poucos municípios ficam sub-representadas.
+- Sem features municipais (Censo Escolar, IBGE, FUNDEB), o modelo estima o mesmo
+  valor para todos os municípios de um mesmo (ano, UF, rede).
+- O split é aleatório, enquanto o uso pretendido é projetar períodos futuros. A
+  validação adequada é temporal: treinar em um ano e avaliar no seguinte.
+- Viés territorial: UFs com poucos municípios ficam sub-representadas.
 
 ## Próximos passos
-- Enriquecer com IBGE/Censo Escolar e reavaliar.
-- Testar modelos adicionais (GradientBoosting) e validação cruzada.
+- Enriquecer com IBGE e Censo Escolar e reavaliar contra a média de grupo.
+- Substituir o split aleatório por validação temporal (2023 -> 2024).
+- Avaliar modelos adicionais (GradientBoosting) após o enriquecimento. Antes disso,
+  nenhum algoritmo supera o limite imposto pelas features disponíveis.
 """
 
 card_path = "/tmp/model_card.md"

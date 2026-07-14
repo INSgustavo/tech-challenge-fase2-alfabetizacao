@@ -24,9 +24,9 @@ CATALOG = "workspace"
 
 # Tabelas centrais.
 #
-# Medalhão: todo indicador educacional deste painel vem da GOLD. As metas, as
-# dimensões, o nome do município e a distribuição de proficiência já chegam
-# integrados nos marts — o dashboard não lê a Bronze para reconstruí-los.
+# Todo indicador educacional do painel vem da Gold. Metas, dimensões, nome do
+# município e distribuição de proficiência já chegam integrados nos marts, e o
+# dashboard não lê a Bronze para reconstruí-los.
 T_RESUMO_UF = f"{CATALOG}.gold.resumo_uf"
 T_IND_MUN = f"{CATALOG}.gold.indicador_municipio"
 T_META_RESULTADO = f"{CATALOG}.gold.meta_vs_resultado"
@@ -36,9 +36,8 @@ T_METRICAS = f"{CATALOG}.observability.pipeline_metrics"
 T_QUARENTENA = f"{CATALOG}.observability.quarantine_records"
 T_SILVER = f"{CATALOG}.silver.medicoes_alfabetizacao"
 
-# Única leitura de Bronze do painel, e não é analítica: telemetria do streaming
-# (volume, latência, frescor). É a fonte de verdade operacional dos eventos e não
-# alimenta nenhum indicador educacional.
+# Única leitura de Bronze do painel, de natureza operacional: telemetria do
+# streaming (volume, latência, frescor). Não alimenta indicador educacional.
 T_EVENTOS = f"{CATALOG}.bronze.eventos_streaming"
 
 # COMMAND ----------
@@ -143,10 +142,10 @@ dbutils.widgets.dropdown(
     "Recorte territorial",
 )
 
-# Com "Todos" o painel deixa de ser um retrato de um ano e passa a mostrar a média
-# dos anos disponíveis — tanto no resultado quanto na meta. `ANO` fica None, e é o
-# helper `filtro_ano` que decide aplicar ou não o recorte; nenhum ponto do notebook
-# deve comparar `F.col("ano") == ANO` diretamente.
+# Com "Todos", o painel passa a exibir a média dos anos disponíveis, tanto no
+# resultado quanto na meta. `ANO` fica None e o recorte é aplicado pelo helper
+# `filtro_ano`. Nenhum ponto do notebook deve comparar `F.col("ano") == ANO`
+# diretamente.
 ANO_SELECIONADO = dbutils.widgets.get("ano_dashboard")
 TODOS_OS_ANOS = ANO_SELECIONADO == TODOS
 ANO = None if TODOS_OS_ANOS else int(ANO_SELECIONADO)
@@ -165,10 +164,10 @@ def filtro_ano(df: DataFrame, coluna: str = "ano") -> DataFrame:
     return df.filter(F.col(coluna) == ANO)
 
 
-# "Todas as redes" agrega as três redes desagregadas e NÃO inclui o código 0
-# (Total): o Total é o agregado oficial do INEP sobre estadual + municipal +
-# privada, então somá-lo às próprias partes contaria os mesmos alunos duas vezes.
-# Quem quiser o número oficial consolidado seleciona "Total".
+# "Todas as redes" agrega estadual, municipal e privada. O código 0 (Total) é
+# excluído por já corresponder ao agregado oficial do INEP sobre essas três redes;
+# incluí-lo contaria os mesmos alunos duas vezes. Para o consolidado oficial,
+# selecione "Total".
 REDE_CODES = {
     "Rede pública": [2, 3],
     "Todas as redes": [2, 3, 5],
@@ -181,13 +180,13 @@ rede_codes = REDE_CODES[REDE_SELECIONADA]
 
 print(f"Filtros ativos: ano={ANO_SELECIONADO} | rede={REDE_SELECIONADA} | UF={UF_SELECIONADA}")
 if TODOS_OS_ANOS:
-    print(f"  → agregando {len(available_years)} anos ({ANO_LABEL}): as taxas e metas "
-          "exibidas são a média do período; a matriz de tendência fica indisponível.")
+    print(f"  Agregando {len(available_years)} anos ({ANO_LABEL}). As taxas e metas "
+          "exibidas são a média do período e a matriz de tendência fica indisponível.")
 
 # COMMAND ----------
-# Dimensão regional de referência. A Gold já traz `regiao` (herdada da dimensão
-# IBGE no join da Silver) — este mapa é só o fallback para UFs em que ela venha
-# nula, garantindo que os cortes regionais não percam linhas.
+# Dimensão regional de referência. A Gold já traz `regiao`, herdada da dimensão
+# IBGE no join da Silver. Este mapa serve como fallback para UFs em que a coluna
+# venha nula, evitando perda de linhas nos cortes regionais.
 REGIAO_UF = {
     "AC": "Norte", "AP": "Norte", "AM": "Norte", "PA": "Norte",
     "RO": "Norte", "RR": "Norte", "TO": "Norte",
@@ -197,9 +196,9 @@ REGIAO_UF = {
     "ES": "Sudeste", "MG": "Sudeste", "RJ": "Sudeste", "SP": "Sudeste",
     "PR": "Sul", "RS": "Sul", "SC": "Sul",
 }
-# A coluna de referência se chama `regiao_ref`, e não `regiao`: unir duas colunas
-# homônimas a um DataFrame que já tem `regiao` (a Gold tem) deixaria a referência
-# ambígua no groupBy seguinte.
+# A coluna de referência é nomeada `regiao_ref` para evitar ambiguidade: o
+# DataFrame da Gold já possui `regiao`, e duas colunas homônimas tornariam a
+# referência ambígua no groupBy seguinte.
 regiao_ref = spark.createDataFrame(
     [(uf, regiao) for uf, regiao in REGIAO_UF.items()],
     ["sigla_uf", "regiao_ref"],
@@ -228,9 +227,9 @@ uf_ano = com_regiao(
     .agg(
         F.avg("taxa_alfabetizacao_media").alias("taxa_resultado"),
         F.max("updated_at").alias("updated_at"),
-        # regiao é funcionalmente dependente da UF: preserva o valor da Gold sem
-        # abrir o grão do agrupamento (incluí-la no groupBy duplicaria a UF se
-        # alguma linha viesse com regiao nula).
+        # `regiao` é funcionalmente dependente da UF. O first preserva o valor da
+        # Gold sem alterar o grão: incluí-la no groupBy duplicaria a UF caso alguma
+        # linha viesse com região nula.
         F.first("regiao", ignorenulls=True).alias("regiao"),
     )
 )
@@ -238,9 +237,9 @@ uf_ano = com_regiao(
 if UF_SELECIONADA != "Todas":
     uf_ano = uf_ano.filter(F.col("sigla_uf") == UF_SELECIONADA)
 
-# Ano anterior disponível, usado para calcular tendência. Não existe "ano anterior"
-# para uma média do período inteiro: com "Todos", a tendência é omitida em vez de
-# ser inventada, e as visões que dependem dela avisam na tela.
+# Ano anterior disponível, usado no cálculo de tendência. Não há ano anterior para
+# uma média de período, portanto com "Todos" a tendência é omitida e as visões que
+# dependem dela sinalizam a indisponibilidade.
 previous_years = (
     [] if TODOS_OS_ANOS
     else [int(year) for year in available_years if int(year) < ANO]
@@ -264,13 +263,13 @@ else:
     )
 
 # COMMAND ----------
-# Metas — lidas da GOLD, não da Bronze.
+# Metas lidas da Gold.
 #
-# Este notebook é camada de consumo: ler `bronze.meta_uf` aqui significaria
-# reimplementar a normalização que a Silver já fez (notebook 03) e manter duas
-# definições paralelas da mesma meta, livres para divergir. A Gold já publica a
-# meta associada a cada território em `meta_vs_resultado.meta_taxa` — é essa que
-# o painel usa, garantindo que o número do dashboard é o mesmo do mart.
+# Este notebook é camada de consumo. Ler `bronze.meta_uf` aqui exigiria
+# reimplementar a normalização já feita pela Silver (notebook 03) e manteria duas
+# definições paralelas da mesma meta, sujeitas a divergir. A Gold publica a meta
+# associada a cada território em `meta_vs_resultado.meta_taxa`, e é essa que o
+# painel utiliza.
 meta_uf_norm = (
     meta_vs_resultado
     .filter((F.col("grao") == "uf") & F.col("meta_taxa").isNotNull())
@@ -285,9 +284,10 @@ meta_brasil_norm = (
     .agg(F.avg("meta_brasil").alias("meta_brasil"))
 )
 
-# Meta do recorte: uma linha por UF. Com um ano selecionado o avg é sobre a única
-# meta daquele ano; com "Todos", é a meta média do período — mantendo meta e
-# resultado na mesma base de comparação (senão o gap sairia errado sem dar erro).
+# Meta do recorte, com uma linha por UF. Com um ano selecionado, a média incide
+# sobre a única meta do ano; com "Todos", corresponde à meta média do período. Meta
+# e resultado permanecem na mesma base de comparação, condição necessária para que
+# o gap seja válido.
 meta_uf_recorte = (
     filtro_ano(meta_uf_norm)
     .groupBy("sigla_uf")
@@ -304,7 +304,7 @@ ranking_ufs = (
     .withColumn(
         "status_meta",
         F.when(F.col("meta_uf").isNull(), F.lit("Meta indisponível"))
-        .when(F.col("gap_meta") >= 0, F.lit("Na trajetória"))
+        .when(F.col("gap_meta") >= 0, F.lit("Meta atingida"))
         .when(F.col("gap_meta") >= -0.05, F.lit("Atenção"))
         .otherwise(F.lit("Prioridade")),
     )
@@ -358,14 +358,12 @@ ufs_na_meta = meta_stats["ufs_na_meta"] or 0
 ufs_com_meta = meta_stats["ufs_com_meta"] or 0
 pct_ufs_na_meta = ufs_na_meta / ufs_com_meta if ufs_com_meta else None
 
-# KPIs municipais. Três recortes obrigatórios no mart meta_vs_resultado:
-#  - `grao`: o mart cobre UF e município; sem o filtro, as linhas de grão UF
-#    entrariam aqui com id_municipio nulo e disputariam espaço na lista de
-#    municípios prioritários (seção 7);
-#  - `fonte_preferencial`: um município pode ter linha oficial E linha do
-#    simulador no mesmo ano; sem o filtro, a média misturaria dado real com
-#    simulado. A Gold já elegeu a melhor fonte por território (notebook 04);
-#  - ano e rede, como no resto do painel.
+# KPIs municipais. O mart meta_vs_resultado exige três recortes:
+#  - `grao`: o mart cobre UF e município. Sem o filtro, as linhas de grão UF entram
+#    com id_municipio nulo e ocupam posições na lista de municípios prioritários;
+#  - `fonte_preferencial`: um município pode ter linha oficial e linha simulada no
+#    mesmo ano. A Gold já indica a fonte a ser usada (notebook 04);
+#  - ano e rede, conforme os filtros do painel.
 municipal_filtrado = filtro_ano(meta_vs_resultado).filter(
     (F.col("grao") == "municipio")
     & F.col("id_municipio").isNotNull()
@@ -588,6 +586,8 @@ hero_html = Template(r"""
   <div class="footer">
     <span>Filtro ativo: $ano · $rede · $uf</span>
     <span>Qualidade: $rejection rejeitados · $failed falhas recentes</span>
+    <span>Régua: médias simples entre UFs e redes (não ponderadas por matrícula) —
+      respondem "média dos territórios", não "taxa das crianças"</span>
   </div>
 </div>
 """).safe_substitute(
@@ -709,6 +709,37 @@ trajetoria_2030 = resultado_historico.unionByName(meta_historica).orderBy("ano",
 display(trajetoria_2030)
 
 # COMMAND ----------
+# Ritmo observado versus ritmo necessário para atingir 100% em 2030. Complementa o
+# gráfico acima, que apresenta as séries mas não confronta as duas velocidades.
+serie_publica = (
+    resumo_uf
+    .filter(F.col("rede").isin([2, 3]))
+    .groupBy("ano")
+    .agg(F.avg("taxa_alfabetizacao_media").alias("taxa"))
+    .orderBy("ano")
+    .collect()
+)
+if len(serie_publica) >= 2:
+    primeiro, ultimo = serie_publica[0], serie_publica[-1]
+    anos_observados = ultimo["ano"] - primeiro["ano"]
+    ritmo_atual = (ultimo["taxa"] - primeiro["taxa"]) / anos_observados
+    anos_restantes = 2030 - ultimo["ano"]
+    ritmo_exigido = (1.0 - ultimo["taxa"]) / anos_restantes if anos_restantes > 0 else None
+    projecao_2030 = min(1.0, ultimo["taxa"] + ritmo_atual * anos_restantes)
+
+    print(f"Ritmo observado ({primeiro['ano']}-{ultimo['ano']}, rede pública): "
+          f"{ritmo_atual*100:+.1f} p.p./ano")
+    if ritmo_exigido is not None:
+        print(f"Ritmo exigido para 100% em 2030: {ritmo_exigido*100:+.1f} p.p./ano "
+              f"({ritmo_exigido/ritmo_atual:.1f}x o ritmo atual)" if ritmo_atual > 0 else
+              f"Ritmo exigido para 100% em 2030: {ritmo_exigido*100:+.1f} p.p./ano "
+              f"(o resultado está estagnado ou em queda)")
+        print(f"Projeção para 2030 mantido o ritmo atual: {projecao_2030*100:.0f}% "
+              f"(meta: 100%)")
+else:
+    print("Ritmo indisponível: é preciso pelo menos dois anos de resultado observado.")
+
+# COMMAND ----------
 # MAGIC %md
 # MAGIC ## 6. Desigualdade por região e rede de ensino
 # MAGIC **Visualização recomendada:** barras agrupadas ou heatmap.
@@ -740,10 +771,9 @@ display(desigualdade_regional)
 # MAGIC A lista usa somente registros com meta municipal disponível e prioriza o maior déficit.
 
 # COMMAND ----------
-# `nome_municipio` vem da GOLD. A dimensão IBGE já foi integrada na Silver
-# (notebook 03), então ler `bronze.municipio` aqui seria a camada de consumo
-# pulando o Medalhão para refazer um join que já está feito. Se o nome vier nulo,
-# o problema está no join da Silver e deve aparecer lá — não ser mascarado aqui.
+# `nome_municipio` vem da Gold. A dimensão IBGE foi integrada na Silver (notebook
+# 03); ler `bronze.municipio` aqui refaria um join já existente. Um nome nulo indica
+# falha no join da Silver e deve ser tratado na origem.
 municipios_prioritarios = (
     municipal_filtrado
     .filter(F.col("meta_taxa").isNotNull())
@@ -775,10 +805,65 @@ display(municipios_prioritarios)
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 8. Pulso do streaming — dados em tempo quase real
+# MAGIC ## 8. Regra dos 743 pontos — visão no grão de aluno
+# MAGIC **Visualização recomendada:** barras empilhadas por faixa de proficiência.
+# MAGIC
+# MAGIC A linha de corte de 743 pontos separa estudantes classificados como alfabetizados.
+# MAGIC Os dados desta seção são simulados e devem ser apresentados dessa forma no vídeo.
+
+# COMMAND ----------
+# A distribuição vem da Gold (mart 5). As faixas e a classificação pelo corte de
+# 743 já foram aplicadas no grão de aluno pela Silver; aqui apenas se somam as
+# contagens, sem redefinir a regra de negócio.
+if table_exists(T_DISTRIBUICAO):
+    distribuicao = filtro_ano(spark.table(T_DISTRIBUICAO))
+    if UF_SELECIONADA != "Todas":
+        distribuicao = distribuicao.filter(F.col("sigla_uf") == UF_SELECIONADA)
+
+    faixas_alunos = (
+        distribuicao
+        .withColumn(
+            "classificacao",
+            F.when(F.col("faixa_label") >= "4", "Alfabetizado").otherwise("Abaixo do corte"),
+        )
+        .groupBy(F.col("faixa_label").alias("faixa_proficiencia"), "classificacao")
+        .agg(
+            F.sum("alunos").alias("alunos"),
+            # Média ponderada pelo número de alunos de cada faixa. A média simples
+            # das médias atribuiria peso igual a faixas de tamanhos diferentes.
+            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
+                    / F.sum("alunos"), 1).alias("proficiencia_media"),
+        )
+        .orderBy("faixa_proficiencia")
+    )
+    display(faixas_alunos)
+
+    resumo_alunos = (
+        distribuicao
+        .groupBy("ano", "rede_label")
+        .agg(
+            F.sum("alunos").alias("alunos"),
+            F.round(F.sum("alunos_alfabetizados") / F.sum("alunos") * 100, 1)
+             .alias("pct_alfabetizados"),
+            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
+                    / F.sum("alunos"), 1).alias("proficiencia_media"),
+        )
+        .select("ano", "rede_label", "alunos", "pct_alfabetizados", "proficiencia_media")
+        .orderBy("ano", F.desc("pct_alfabetizados"))
+    )
+    display(resumo_alunos)
+else:
+    print("AVISO: gold.distribuicao_proficiencia ainda não existe. Execute os notebooks "
+          "03 e 04 com bronze.alunos disponível. A visão de 743 pontos ficará indisponível.")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 9. Pulso do streaming — dados em tempo quase real
 # MAGIC **Visualização recomendada:** linha ou área para o volume por janela de tempo.
 # MAGIC
 # MAGIC Esta seção é a evidência visual da ingestão híbrida exigida pelo desafio.
+# MAGIC Posicionada junto ao bloco operacional (seção 10): latência e volume são
+# MAGIC métricas de engenharia e não compõem a leitura educacional das seções 2 a 8.
 
 # COMMAND ----------
 if table_exists(T_EVENTOS):
@@ -821,63 +906,9 @@ if table_exists(T_EVENTOS):
         )
         display(latest_stream)
     else:
-        print("⚠ A tabela de streaming existe, mas não possui event_time e _ingestion_timestamp.")
+        print("AVISO: a tabela de streaming não possui event_time e _ingestion_timestamp.")
 else:
-    print("⚠ bronze.eventos_streaming ainda não existe. Execute o notebook 02.")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 9. Regra dos 743 pontos — visão no grão de aluno
-# MAGIC **Visualização recomendada:** barras empilhadas por faixa de proficiência.
-# MAGIC
-# MAGIC A linha de corte de 743 pontos separa estudantes classificados como alfabetizados.
-# MAGIC Os dados desta seção são simulados e devem ser apresentados dessa forma no vídeo.
-
-# COMMAND ----------
-# A distribuição vem da GOLD (mart 5), não da Bronze. As faixas e a classificação
-# pelo corte de 743 já foram aplicadas no grão de aluno pela Silver — aqui só se
-# somam contagens. Antes, este bloco reimplementava as faixas e o corte em cima
-# dos microdados crus, mantendo uma segunda definição da mesma regra de negócio.
-if table_exists(T_DISTRIBUICAO):
-    distribuicao = filtro_ano(spark.table(T_DISTRIBUICAO))
-    if UF_SELECIONADA != "Todas":
-        distribuicao = distribuicao.filter(F.col("sigla_uf") == UF_SELECIONADA)
-
-    faixas_alunos = (
-        distribuicao
-        .withColumn(
-            "classificacao",
-            F.when(F.col("faixa_label") >= "4", "Alfabetizado").otherwise("Abaixo do corte"),
-        )
-        .groupBy(F.col("faixa_label").alias("faixa_proficiencia"), "classificacao")
-        .agg(
-            F.sum("alunos").alias("alunos"),
-            # média ponderada: cada faixa contribui na proporção dos seus alunos —
-            # tirar média das médias daria peso igual a faixas de tamanhos diferentes
-            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
-                    / F.sum("alunos"), 1).alias("proficiencia_media"),
-        )
-        .orderBy("faixa_proficiencia")
-    )
-    display(faixas_alunos)
-
-    resumo_alunos = (
-        distribuicao
-        .groupBy("ano", "rede_label")
-        .agg(
-            F.sum("alunos").alias("alunos"),
-            F.round(F.sum("alunos_alfabetizados") / F.sum("alunos") * 100, 1)
-             .alias("pct_alfabetizados"),
-            F.round(F.sum(F.col("proficiencia_media") * F.col("alunos"))
-                    / F.sum("alunos"), 1).alias("proficiencia_media"),
-        )
-        .select("ano", "rede_label", "alunos", "pct_alfabetizados", "proficiencia_media")
-        .orderBy("ano", F.desc("pct_alfabetizados"))
-    )
-    display(resumo_alunos)
-else:
-    print("⚠ gold.distribuicao_proficiencia ainda não existe. Execute os notebooks 03 e 04 "
-          "com bronze.alunos disponível — a visão de 743 pontos ficará indisponível.")
+    print("AVISO: bronze.eventos_streaming ainda não existe. Execute o notebook 02.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -938,7 +969,7 @@ if table_exists(T_METRICAS):
     )
     display(metricas_dashboard)
 else:
-    print("⚠ observability.pipeline_metrics ainda não existe. Execute o notebook 08.")
+    print("AVISO: observability.pipeline_metrics ainda não existe. Execute o notebook 08.")
 
 # COMMAND ----------
 # MAGIC %md
@@ -955,7 +986,7 @@ action_board = (
         "recomendacao",
         F.when(F.col("status_meta") == "Prioridade", "Plano intensivo e diagnóstico territorial")
         .when(F.col("status_meta") == "Atenção", "Monitoramento mensal e intervenção focalizada")
-        .when(F.col("status_meta") == "Na trajetória", "Preservar avanço e compartilhar práticas")
+        .when(F.col("status_meta") == "Meta atingida", "Preservar avanço e compartilhar práticas")
         .otherwise("Completar dados de meta antes da decisão"),
     )
     .select(
@@ -986,7 +1017,7 @@ C_BG = "linear-gradient(135deg,#07111f,#101a35)"
 C_TEXT, C_MUTED = "#eef5ff", "#9eb0c7"
 C_CYAN, C_GREEN, C_AMBER, C_RED, C_VIOLET = "#34d7e7", "#2de2a0", "#ffc857", "#ff6b7a", "#8b7cff"
 STATUS_COLORS = {
-    "Na trajetória": C_GREEN, "Atenção": C_AMBER,
+    "Meta atingida": C_GREEN, "Atenção": C_AMBER,
     "Prioridade": C_RED, "Meta indisponível": C_MUTED,
 }
 
@@ -1064,7 +1095,9 @@ rk = ranking_ufs.orderBy(F.desc("taxa_pct")).collect()
 
 donuts = (
     '<div style="display:flex;gap:26px;flex-wrap:wrap;justify-content:center">'
-    + donut(pct_ufs_na_meta, "UFs na trajetória da meta", C_GREEN)
+    # O cálculo é `taxa >= meta` no recorte, ou seja, nível atingido e não evolução
+    # rumo à meta. O rótulo reflete o que a métrica mede.
+    + donut(pct_ufs_na_meta, "UFs que atingiram a meta", C_GREEN)
     + donut(pct_municipios_meta, "Municípios monitorados na meta", C_CYAN)
     + donut(taxa_media_ufs, f"Resultado médio · {REDE_SELECIONADA} {ANO_LABEL}", C_VIOLET)
     + (donut(meta_nacional, f"Meta nacional {ANO_LABEL}", C_AMBER) if meta_nacional else "")
@@ -1179,7 +1212,7 @@ else:
 
 # COMMAND ----------
 # ---- Gráfico 4 · Distribuição dos alunos e a linha de corte 743 (SIMULADO) ----
-# Histograma servido pelo mart 5: as faixas de 25 pontos já vêm agregadas da Gold.
+# Histograma servido pelo mart 5, com as faixas de 25 pontos já agregadas na Gold.
 if table_exists(T_DISTRIBUICAO):
     dist = (
         filtro_ano(spark.table(T_DISTRIBUICAO))
@@ -1261,15 +1294,21 @@ if table_exists(T_EVENTOS):
 # MAGIC %md
 # MAGIC ## 13. Potencial de inteligência artificial
 # MAGIC
-# MAGIC A camada Gold já permite evoluir para três aplicações:
+# MAGIC **Situação atual:** o experimento do notebook 07 indica que, com as features
+# MAGIC disponíveis (UF, rede, ano), o modelo equivale a uma média de grupo. Ele não
+# MAGIC distingue municípios dentro da mesma UF e rede, onde se concentra a maior
+# MAGIC parte da variação. Trata-se de uma prova de conceito, não de um preditor
+# MAGIC aplicável.
+# MAGIC
+# MAGIC **Evolução possível a partir da Gold**, condicionada ao enriquecimento com
+# MAGIC features municipais (Censo Escolar, IBGE, FUNDEB):
 # MAGIC
 # MAGIC 1. **Predição:** estimar a taxa futura de alfabetização por município.
 # MAGIC 2. **Clusterização:** agrupar municípios por perfil de vulnerabilidade educacional.
 # MAGIC 3. **Detecção de anomalias:** identificar alterações incompatíveis com o histórico.
 # MAGIC
-# MAGIC O uso responsável exige enriquecimento socioeconômico, validação temporal,
-# MAGIC explicabilidade e cuidado para que o modelo apoie políticas públicas sem
-# MAGIC automatizar decisões sensíveis.
+# MAGIC O uso responsável exige validação temporal, explicabilidade e cuidado para
+# MAGIC que o modelo apoie políticas públicas sem automatizar decisões sensíveis.
 
 # COMMAND ----------
 # Inventário simples de features disponíveis para comunicar a prontidão analítica.
@@ -1311,6 +1350,6 @@ display(spark.createDataFrame(feature_rows))
 # MAGIC matriz na segunda; streaming, qualidade e IA na última seção.
 
 # COMMAND ----------
-print("✓ Command Center atualizado.")
-print("✓ Filtros, capa, rankings, trajetória, streaming, qualidade e IA preparados.")
-print("→ Use '+ Add to dashboard' nos resultados que farão parte do vídeo executivo.")
+print("Command Center atualizado.")
+print("Filtros, capa, rankings, trajetória, streaming, qualidade e IA preparados.")
+print("Use '+ Add to dashboard' nos resultados que farão parte do vídeo executivo.")
