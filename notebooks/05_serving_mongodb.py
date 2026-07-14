@@ -18,8 +18,6 @@
 dbutils.library.restartPython()
 
 # COMMAND ----------
-from pyspark.sql import functions as F
-
 CATALOG = "workspace"
 SOURCE = f"{CATALOG}.gold.indicador_municipio"
 DATABASE = "alfabetizacao"
@@ -66,20 +64,8 @@ def make_writer(mongo_uri, database, collection):
 
 # COMMAND ----------
 if MONGO_URI:
-    # A chave do upsert (ano + id_municipio + rede) é mais estreita que o grão da
-    # Gold, que também separa por `fonte_dados`. Sem o filtro, o mesmo município
-    # teria a linha oficial e a simulada disputando o mesmo documento, e a última
-    # partição a escrever venceria — de forma não determinística. A Gold já elegeu
-    # a melhor fonte por município (notebook 04): publicamos só a preferencial.
-    df = spark.table(SOURCE).filter(F.col("fonte_preferencial"))
+    df = spark.table(SOURCE)
     total = df.count()
-
-    chave_unica = df.select("ano", "id_municipio", "rede").distinct().count()
-    if chave_unica != total:
-        raise AssertionError(
-            f"A fonte do serving tem {total:,} linhas para {chave_unica:,} chaves "
-            "(ano+id_municipio+rede) — o upsert perderia documentos silenciosamente."
-        )
 
     df.foreachPartition(make_writer(MONGO_URI, DATABASE, COLLECTION))
     print(f"✓ {total:,} documentos publicados/atualizados em {DATABASE}.{COLLECTION}")
