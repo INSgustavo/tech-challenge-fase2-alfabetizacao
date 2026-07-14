@@ -16,9 +16,18 @@
 
 # COMMAND ----------
 CATALOG = "workspace"
+import sys
 import uuid
 from datetime import datetime, timezone
 from pyspark.sql import functions as F
+
+# Corte de alfabetização compartilhado em src/ — o Gate valida a regra contra a
+# mesma constante que a Silver aplicou, não contra um 743 digitado de novo aqui.
+try:
+    sys.path.append("..")
+    from src.utils import ALFABETIZACAO_CORTE
+except Exception:
+    ALFABETIZACAO_CORTE = 743
 
 # run_id pode ser injetado pelo Workflow (widget); senão, gera um novo.
 try:
@@ -101,6 +110,18 @@ rejection_reason = (
     .when(~F.col("rede").isin([0, 2, 3, 5]), F.lit("rede_fora_do_dominio"))
     .when(F.col("taxa_alfabetizacao").isNotNull()
           & ~F.col("taxa_alfabetizacao").between(0.0, 1.0), F.lit("taxa_fora_do_dominio"))
+    # A meta passa pela mesma régua do resultado: as duas são comparadas entre si
+    # na Gold, e uma meta em percentual (0-100) que escapasse da normalização da
+    # Silver produziria um gap absurdo sem disparar erro nenhum.
+    .when(F.col("meta_taxa").isNotNull()
+          & ~F.col("meta_taxa").between(0.0, 1.0), F.lit("meta_fora_do_dominio"))
+    # Domínios que o dashboard e os marts usam como chave de decisão: um valor
+    # inesperado aqui não quebra o pipeline, ele corrompe a leitura em silêncio.
+    .when(F.col("grao").isNull() | ~F.col("grao").isin(["uf", "municipio"]),
+          F.lit("grao_invalido"))
+    .when(F.col("fonte_dados").isNull()
+          | ~F.col("fonte_dados").isin(["oficial_inep", "simulado"]),
+          F.lit("fonte_dados_invalida"))
     # integridade referencial (edital: validação de chaves de relacionamento)
     .when(F.col("id_municipio").isNotNull() & F.col("_fk_municipio_ok").isNull(),
           F.lit("municipio_inexistente_na_dimensao"))
@@ -160,6 +181,79 @@ print(f"✓ {APROVADA} publicada com {rows_written:,} registros")
 
 # COMMAND ----------
 # MAGIC %md
+# MAGIC ## 3b. Quality Gate da Silver de alunos (`silver.alunos_proficiencia`)
+# MAGIC Mesmo padrão da tabela de medições: reprovados vão para a quarentena e os
+# MAGIC aprovados são publicados em `silver.alunos_aprovados`, que é a fonte do mart
+# MAGIC `gold.distribuicao_proficiencia`. O DoD da Gold (contrato, seção 11) exige
+# MAGIC Quality Gate aprovado — isso vale para **toda** tabela que alimenta um mart.
+
+# COMMAND ----------
+ALUNOS_SILVER = f"{CATALOG}.silver.alunos_proficiencia"
+ALUNOS_APROVADOS = f"{CATALOG}.silver.alunos_aprovados"
+
+# Domínio da escala de proficiência do Saeb. Um valor fora daqui não é um aluno
+# com desempenho extremo — é erro de unidade ou de parsing.
+PROFICIENCIA_MIN, PROFICIENCIA_MAX = 0.0, 1000.0
+
+alunos_rejeitados = 0
+if spark.catalog.tableExists(ALUNOS_SILVER):
+    a = spark.table(ALUNOS_SILVER)
+    alunos_lidos = a.count()
+
+    motivo_aluno = (
+        F.when(F.col("record_id").isNull() | F.col("ano").isNull()
+               | F.col("sigla_uf").isNull() | F.col("aluno_id").isNull(),
+               F.lit("aluno_campo_critico_nulo"))
+        .when(~F.col("sigla_uf").isin(UFS_VALIDAS), F.lit("aluno_sigla_uf_invalida"))
+        .when(~F.col("rede").isin([0, 2, 3, 5]), F.lit("aluno_rede_fora_do_dominio"))
+        .when(F.col("proficiencia_portugues").isNotNull()
+              & ~F.col("proficiencia_portugues").between(PROFICIENCIA_MIN, PROFICIENCIA_MAX),
+              F.lit("aluno_proficiencia_fora_do_dominio"))
+        # Coerência da regra de negócio: `alfabetizado` TEM que ser o resultado do
+        # corte aplicado à proficiência do próprio registro. Se divergir, a regra
+        # mudou em algum lugar sem versionar — é exatamente o que o contrato
+        # (seção 4) quer evitar ao exigir alfabetizacao_rule_version.
+        .when(F.col("proficiencia_portugues").isNotNull()
+              & (F.col("alfabetizado")
+                 != (F.col("proficiencia_portugues") >= ALFABETIZACAO_CORTE)),
+              F.lit("aluno_flag_incoerente_com_o_corte"))
+        .when(F.col("alfabetizacao_rule_version").isNull(),
+              F.lit("aluno_regra_nao_versionada"))
+        .otherwise(F.lit(None))
+    )
+
+    a_marcada = a.withColumn("rejection_reason", motivo_aluno)
+    a_invalidos = a_marcada.filter(F.col("rejection_reason").isNotNull())
+    a_aprovados = a_marcada.filter(F.col("rejection_reason").isNull()).drop("rejection_reason")
+
+    alunos_rejeitados = a_invalidos.count()
+    alunos_aprovados_n = a_aprovados.count()
+
+    if alunos_rejeitados:
+        (a_invalidos
+         .withColumn("run_id", F.lit(RUN_ID))
+         .withColumn("task_name", F.lit(TASK))
+         .withColumn("payload", F.to_json(F.struct(*a.columns)))
+         .withColumn("ingestion_timestamp", F.current_timestamp())
+         .select("run_id", "task_name", "rejection_reason", "payload", "ingestion_timestamp")
+         .write.format("delta").mode("append")
+         .saveAsTable(f"{CATALOG}.observability.quarantine_records"))
+        a_invalidos.groupBy("rejection_reason").count().orderBy(F.desc("count")).show(truncate=False)
+
+    (a_aprovados.write.format("delta").mode("overwrite")
+        .option("overwriteSchema", "true").saveAsTable(ALUNOS_APROVADOS))
+    spark.sql(f"COMMENT ON TABLE {ALUNOS_APROVADOS} IS "
+              "'Alunos aprovados pelo Quality Gate (06). Fonte da gold.distribuicao_proficiencia. Responsável: P4.'")
+
+    alunos_id_unico = alunos_aprovados_n == a_aprovados.select("record_id").distinct().count()
+    print(f"✓ {ALUNOS_APROVADOS}: {alunos_aprovados_n:,} aprovados "
+          f"| {alunos_rejeitados:,} em quarentena (de {alunos_lidos:,} lidos)")
+else:
+    print(f"⚠ {ALUNOS_SILVER} não existe — gate de alunos não aplicado.")
+    alunos_id_unico = True
+
+# COMMAND ----------
+# MAGIC %md
 # MAGIC ## 4. Validações sistêmicas (bloqueantes)
 # MAGIC Falhas aqui reprovam a task — a Gold **não** deve ser publicada.
 
@@ -167,11 +261,42 @@ print(f"✓ {APROVADA} publicada com {rows_written:,} registros")
 record_id_unico = rows_written == aprovados.select("record_id").distinct().count()
 cobertura = (rows_written / rows_read) if rows_read else 0.0
 
+# Integridade das metas: se a Bronze publica uma meta para (ano, UF), o fato
+# daquele (ano, UF) TEM que tê-la recebido na Silver. Um `meta_taxa` nulo aqui
+# não é ausência de meta — é falha de chave no join, e a Gold publicaria
+# "Meta indisponível" para uma UF que na verdade tem meta.
+#
+# O join é por (ano, sigla_uf), e não só por ano, de propósito: DF e RR não
+# existem na fonte do INEP e por isso não têm meta nenhuma. Cobrar meta deles
+# reprovaria o Gate por um buraco da fonte, não por um defeito do pipeline.
+META_UF = f"{CATALOG}.bronze.meta_uf"
+if spark.catalog.tableExists(META_UF):
+    chaves_com_meta = (
+        spark.table(META_UF)
+        .select(F.col("ano").cast("int").alias("ano"),
+                F.upper(F.trim(F.col("sigla_uf"))).alias("sigla_uf"))
+        .distinct()
+    )
+    metas_perdidas = (
+        aprovados.join(chaves_com_meta, on=["ano", "sigla_uf"], how="inner")
+        .filter(F.col("meta_taxa").isNull())
+    )
+    n_metas_perdidas = metas_perdidas.count()
+    if n_metas_perdidas:
+        print(f"✗ {n_metas_perdidas:,} fatos perderam a meta no join da Silver:")
+        (metas_perdidas.groupBy("ano", "sigla_uf", "grao").count()
+         .orderBy(F.desc("count")).show(10, truncate=False))
+else:
+    print(f"⚠ {META_UF} não existe — check de integridade das metas não aplicado.")
+    n_metas_perdidas = 0
+
 checks_sistemicos = {
     "silver_nao_vazia": rows_read > 0,
     "aprovados_maior_que_zero": rows_written > 0,
     "record_id_unico_nos_aprovados": record_id_unico,
     f"cobertura_min_{COBERTURA_MIN:.0%}": cobertura >= COBERTURA_MIN,
+    "nenhuma_meta_perdida_no_join": n_metas_perdidas == 0,
+    "record_id_unico_nos_alunos_aprovados": alunos_id_unico,
 }
 
 for nome, ok in checks_sistemicos.items():
@@ -197,7 +322,9 @@ metric = Row(
     finished_at=datetime.now(timezone.utc),
     rows_read=int(rows_read),
     rows_written=int(rows_written),
-    rows_rejected=int(rows_rejected),
+    # Inclui os alunos reprovados: a auditoria tem que refletir tudo que a task
+    # mandou para a quarentena, senão o número não bate com a tabela.
+    rows_rejected=int(rows_rejected + alunos_rejeitados),
     max_event_time=None,
     schema_version="1.0",
     error_message=error_message,

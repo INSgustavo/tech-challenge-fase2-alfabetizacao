@@ -139,12 +139,17 @@ Campos mínimos:
 | 00_setup | configuração | schemas, volumes, auditoria |
 | 01_bronze_batch | raw files | `bronze.*` |
 | 02_bronze_streaming | streaming landing | `bronze.eventos_streaming` |
-| 03_silver | Bronze batch e streaming | `silver.medicoes_alfabetizacao` |
-| 06_quality | Silver | métricas e quarentena |
+| 03_silver | Bronze batch e streaming | `silver.medicoes_alfabetizacao`, `silver.alunos_proficiencia` |
+| 06_quality | Silver | `silver.medicoes_aprovadas`, `silver.alunos_aprovados`, métricas e quarentena |
 | 04_gold | Silver aprovada | `gold.*` |
 | 05_serving | Gold | MongoDB |
 | 07_ml | Gold | MLflow |
 | 08_monitoring | logs e tabelas | `observability.pipeline_metrics` |
+
+> A camada de consumo (dashboard, serving, ML) lê **exclusivamente da Gold**. A
+> única exceção é a telemetria do streaming (`bronze.eventos_streaming`), que é
+> operacional e não alimenta indicador educacional. Nenhum consumidor recalcula
+> meta, dimensão ou regra de negócio que a Silver já aplicou.
 
 ## 11. Definition of Done
 
