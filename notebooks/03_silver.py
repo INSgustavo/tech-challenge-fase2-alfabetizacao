@@ -22,10 +22,11 @@ from pyspark.sql import functions as F
 # falhar (ex.: notebook importado avulso), usa o fallback inline equivalente.
 try:
     sys.path.append("..")
-    from src.utils import REDE_MAP, ALFABETIZACAO_CORTE
+    from src.utils import REDE_MAP, ALFABETIZACAO_CORTE, ALFABETIZACAO_RULE_VERSION
 except Exception:
     REDE_MAP = {0: "total", 2: "estadual", 3: "municipal", 5: "privada"}
     ALFABETIZACAO_CORTE = 743
+    ALFABETIZACAO_RULE_VERSION = "1.0"
 
 rede_mapping = F.create_map([F.lit(x) for pair in REDE_MAP.items() for x in pair])
 
@@ -66,27 +67,56 @@ batch_canonical = (
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## 1b. Fatos — batch municipal (dado oficial, se disponível)
+# MAGIC ## 1b. Fatos — batch municipal (dado oficial)
 # MAGIC A Base dos Dados também publica o indicador no grão município
-# MAGIC (`br_inep_indicador_crianca_alfabetizada`, tabela `municipio`). Se o P2
-# MAGIC subir esse CSV (ver notebooks/01), ele entra aqui como dado OFICIAL no
-# MAGIC grão municipal — os marts municipais deixam de depender só do simulador.
+# MAGIC (`br_inep_indicador_crianca_alfabetizada`, tabela `municipio`). Ele entra
+# MAGIC aqui como dado OFICIAL no grão municipal — os marts municipais deixam de
+# MAGIC depender só do simulador.
+# MAGIC
+# MAGIC **O CSV municipal não traz `sigla_uf`** — é identificado só por
+# MAGIC `id_municipio`. A UF é derivada aqui pelo join com a dimensão territorial
+# MAGIC `bronze.municipio` (IBGE). Sem ela não há como associar a meta estadual
+# MAGIC (seção 5), agregar por UF na Gold, nem compor o `record_id` (seção 7) —
+# MAGIC e o Quality Gate rejeitaria os registros por campo crítico nulo.
 
 # COMMAND ----------
 if existe("bronze", "avaliacao_alfabetizacao_municipio"):
-    batch_mun = spark.table(tbl("bronze", "avaliacao_alfabetizacao_municipio"))
+    if not existe("bronze", "municipio"):
+        raise RuntimeError(
+            "bronze.municipio é obrigatória para derivar a sigla_uf do indicador "
+            "municipal oficial — rode o notebook 01 antes da Silver."
+        )
+
+    # Chave de resolução território → UF, e a ÚNICA fonte de verdade da UF do fato
+    # municipal. Qualquer `sigla_uf` que venha da Bronze é descartada de propósito:
+    # a ingestão aplica schema explícito por POSIÇÃO, e como o CSV não tem essa
+    # coluna, o que estiver lá é o valor de outro campo (ou nulo) — nunca a UF.
+    uf_por_municipio = (
+        spark.table(tbl("bronze", "municipio"))
+        .withColumn("id_municipio", F.lpad(F.col("id_municipio").cast("string"), 7, "0"))
+        .select("id_municipio", F.upper(F.trim(F.col("sigla_uf"))).alias("sigla_uf"))
+        .dropDuplicates(["id_municipio"])
+    )
+
+    batch_mun = (
+        spark.table(tbl("bronze", "avaliacao_alfabetizacao_municipio"))
+        .withColumn("id_municipio", F.lpad(F.col("id_municipio").cast("string"), 7, "0"))
+        .drop("sigla_uf")
+        .join(uf_por_municipio, on="id_municipio", how="left")
+    )
+
+    def opcional(nome, tipo):
+        """Colunas que podem não existir no CSV publicado (ex.: media_portugues)."""
+        return (F.col(nome) if nome in batch_mun.columns else F.lit(None)).cast(tipo)
+
     batch_mun_canonical = (
         batch_mun
-        .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
-        .withColumn("id_municipio", F.lpad(F.col("id_municipio").cast("string"), 7, "0"))
         .withColumn("grao", F.lit("municipio"))
-        .withColumn("serie", F.col("serie").cast("int"))
-        .withColumn("rede", F.col("rede").cast("int"))
+        .withColumn("serie", opcional("serie", "int"))
+        .withColumn("rede", opcional("rede", "int"))
         .withColumn("rede_label", rede_mapping[F.col("rede")])
         .withColumn("taxa_alfabetizacao", F.col("taxa_alfabetizacao").cast("double") / 100.0)
-        .withColumn("media_portugues",
-                    F.col("media_portugues").cast("double")
-                    if "media_portugues" in batch_mun.columns else F.lit(None).cast("double"))
+        .withColumn("media_portugues", opcional("media_portugues", "double"))
         .withColumn("alfabetizado", F.when(F.col("media_portugues").isNotNull(),
                                            F.col("media_portugues") >= ALFABETIZACAO_CORTE))
         .withColumn("event_id", F.lit(None).cast("string"))
@@ -95,7 +125,15 @@ if existe("bronze", "avaliacao_alfabetizacao_municipio"):
         .withColumn("fonte_dados", F.lit("oficial_inep"))
         .withColumn("schema_version", F.lit("1.0"))
     )
-    print(f"✓ dado oficial municipal encontrado: {batch_mun_canonical.count():,} registros")
+
+    total_mun = batch_mun_canonical.count()
+    sem_uf = batch_mun_canonical.filter(F.col("sigla_uf").isNull()).count()
+    print(f"✓ dado oficial municipal: {total_mun:,} registros "
+          f"| {total_mun - sem_uf:,} com UF resolvida pela dimensão")
+    if sem_uf:
+        print(f"⚠ {sem_uf:,} registros sem correspondência em bronze.municipio — "
+              "seguem sem UF e o Quality Gate (06) os acusa na checagem de "
+              "integridade referencial.")
 else:
     batch_mun_canonical = None
     print("⚠ bronze.avaliacao_alfabetizacao_municipio não existe — marts municipais "
@@ -246,6 +284,54 @@ fatos = fatos.withColumn(
 
 # COMMAND ----------
 # MAGIC %md
+# MAGIC ## 5b. Reconciliação das metas — toda meta da Bronze chegou ao resultado?
+# MAGIC O join da seção 5 é `left`: uma meta da Bronze que não encontre fato
+# MAGIC correspondente some silenciosamente. Esta célula torna essa perda visível,
+# MAGIC comparando o total de metas na Bronze com o total efetivamente consumido e
+# MAGIC listando os anos órfãos.
+# MAGIC
+# MAGIC Metas de anos futuros (sem medição publicada) são órfãs por natureza — o
+# MAGIC objetivo aqui não é zerar o número, é **não descobrir isso por acidente**.
+
+# COMMAND ----------
+chaves_fato = fatos.select("ano", "sigla_uf", "id_municipio").distinct().cache()
+
+def reconciliar_meta(tabela, meta_df, chaves):
+    if meta_df is None:
+        return
+    alvo = chaves_fato.select(*chaves).distinct()
+    consumidas = meta_df.join(alvo, chaves, "inner").count()
+    orfas = meta_df.join(alvo, chaves, "left_anti")
+    total, n_orfas = meta_df.count(), orfas.count()
+    print(f"\nbronze.{tabela}: {total:,} metas | {consumidas:,} associadas a um fato "
+          f"| {n_orfas:,} órfãs")
+    if n_orfas:
+        anos_orfaos = [r["ano"] for r in orfas.select("ano").distinct().orderBy("ano").collect()]
+        print(f"  ⚠ anos sem fato correspondente: {anos_orfaos}")
+        print("    (metas futuras não têm medição — esperado; qualquer ano que JÁ "
+              "possui medição aparecendo aqui indica falha de chave no join)")
+
+print("=== Reconciliação das metas (Bronze → Silver) ===")
+reconciliar_meta("meta_brasil", meta_br if existe("bronze", "meta_brasil") else None, ["ano"])
+reconciliar_meta("meta_uf", meta_uf if existe("bronze", "meta_uf") else None,
+                 ["ano", "sigla_uf"])
+reconciliar_meta("meta_municipio", meta_mun if existe("bronze", "meta_municipio") else None,
+                 ["ano", "id_municipio"])
+
+# Contrapartida: fatos que ficaram sem meta. Junto com o bloco acima, fecha a conta
+# nos dois sentidos — nenhuma meta se perde sem aviso, nenhum fato fica sem meta
+# sem aviso.
+sem_meta = fatos.filter(F.col("meta_taxa").isNull())
+n_sem_meta = sem_meta.count()
+if n_sem_meta:
+    anos_sem_meta = [r["ano"] for r in sem_meta.select("ano").distinct().orderBy("ano").collect()]
+    print(f"\n⚠ {n_sem_meta:,} fatos sem meta associada (anos: {anos_sem_meta}) — "
+          "aparecem como 'Meta indisponível' no dashboard.")
+
+chaves_fato.unpersist()
+
+# COMMAND ----------
+# MAGIC %md
 # MAGIC ## 6. Integração com dados de alunos (agregado por ano + UF + rede)
 # MAGIC Microdados de alunos agregados e associados como enriquecimento: média de
 # MAGIC proficiência e % de alunos acima do corte de alfabetização (743).
@@ -288,6 +374,9 @@ silver = (
             F.col("rede"), F.col("source"),
             F.coalesce(F.col("event_id"), F.lit("batch"))), 256),
     )
+    # Contrato, seção 4: a Silver versiona a regra de negócio junto com o dado —
+    # um registro gravado hoje precisa dizer sob qual corte foi classificado.
+    .withColumn("alfabetizacao_rule_version", F.lit(ALFABETIZACAO_RULE_VERSION))
     .withColumn("processed_at", F.current_timestamp())
     .dropDuplicates(["record_id"])
 )
@@ -306,3 +395,69 @@ com_meta = silver.filter(F.col("meta_taxa").isNotNull()).count()
 print(f"Silver gravada com {total:,} registros "
       f"| {com_dim:,} enriquecidos com dimensão UF "
       f"| {com_meta:,} com meta associada")
+
+# COMMAND ----------
+# MAGIC %md
+# MAGIC ## 8. Silver de alunos — `silver.alunos_proficiencia` (grão: aluno)
+# MAGIC A seção 6 usa os microdados de alunos apenas como *enriquecimento agregado*
+# MAGIC do fato. Mas a distribuição de proficiência (a curva em torno do corte de
+# MAGIC 743) é uma análise por si só, e o consumidor não pode ir buscá-la na Bronze
+# MAGIC sem furar o Medalhão.
+# MAGIC
+# MAGIC Esta tabela publica o grão de aluno já canônico: chaves normalizadas, corte
+# MAGIC de alfabetização aplicado **por aluno** — que é como o contrato o define
+# MAGIC (seção 4) — e a versão da regra registrada. A Gold agrega a distribuição a
+# MAGIC partir daqui (notebook 04).
+
+# COMMAND ----------
+if existe("bronze", "alunos"):
+    alunos_silver = (
+        spark.table(tbl("bronze", "alunos"))
+        .withColumn("ano", F.col("ano").cast("int"))
+        .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
+        .withColumn("serie", F.col("serie").cast("int"))
+        .withColumn("rede", F.col("rede").cast("int"))
+        .withColumn("rede_label", rede_mapping[F.col("rede")])
+        .withColumn("proficiencia_portugues", F.col("proficiencia_portugues").cast("double"))
+        # O corte de 743 é definido POR ALUNO (contrato, seção 4). Aqui ele é
+        # aplicado no grão em que faz sentido — diferente da flag `alfabetizado`
+        # da tabela de medições, que incide sobre uma média agregada.
+        .withColumn("alfabetizado",
+                    F.when(F.col("proficiencia_portugues").isNotNull(),
+                           F.col("proficiencia_portugues") >= ALFABETIZACAO_CORTE))
+        .withColumn("alfabetizacao_rule_version", F.lit(ALFABETIZACAO_RULE_VERSION))
+        .withColumn("source", F.lit("batch_alunos"))
+        .withColumn("fonte_dados", F.lit("simulado"))
+        .withColumn("schema_version", F.lit("1.0"))
+        .withColumn("event_time", F.lit(None).cast("timestamp"))
+        .withColumn("record_id",
+                    F.sha2(F.concat_ws("|", F.col("aluno_id"), F.col("ano"),
+                                       F.col("sigla_uf"), F.col("rede"),
+                                       F.col("source")), 256))
+        .withColumn("processed_at", F.current_timestamp())
+        .select(
+            "record_id", "aluno_id", "ano", "sigla_uf", "serie", "rede", "rede_label",
+            "proficiencia_portugues", "alfabetizado", "alfabetizacao_rule_version",
+            "source", "fonte_dados", "schema_version", "event_time", "processed_at",
+        )
+        .dropDuplicates(["record_id"])
+    )
+
+    (
+        alunos_silver.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(tbl("silver", "alunos_proficiencia"))
+    )
+    spark.sql(f"COMMENT ON TABLE {tbl('silver', 'alunos_proficiencia')} IS "
+              "'Proficiência por aluno (microdados SIMULADOS), corte 743 aplicado no grão "
+              "de aluno. Fonte da gold.distribuicao_proficiencia. Responsável: P4.'")
+
+    n_alunos = alunos_silver.count()
+    n_alfab = alunos_silver.filter(F.col("alfabetizado")).count()
+    print(f"✓ silver.alunos_proficiencia: {n_alunos:,} alunos "
+          f"| {n_alfab:,} acima do corte de {ALFABETIZACAO_CORTE} pontos")
+else:
+    print("⚠ bronze.alunos não existe — silver.alunos_proficiencia não publicada; "
+          "a distribuição de proficiência ficará indisponível no dashboard.")
