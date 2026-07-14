@@ -208,12 +208,12 @@ for tabela, (path, schema) in arquivos_p2.items():
 # COMMAND ----------
 schema_avaliacao_mun = StructType([
     StructField("ano", IntegerType(), False),
-    StructField("sigla_uf", StringType(), False),
     StructField("id_municipio", StringType(), False),
     StructField("serie", IntegerType(), True),
     StructField("rede", IntegerType(), True),
     StructField("taxa_alfabetizacao", DoubleType(), True),
     StructField("media_portugues", DoubleType(), True),
+    StructField("sigla_uf", StringType(), False)
 ])
 
 try:
