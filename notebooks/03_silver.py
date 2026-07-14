@@ -304,11 +304,22 @@ def reconciliar_meta(tabela, meta_df, chaves):
     total, n_orfas = meta_df.count(), orfas.count()
     print(f"\nbronze.{tabela}: {total:,} metas | {consumidas:,} associadas a um fato "
           f"| {n_orfas:,} órfãs")
-    if n_orfas:
-        anos_orfaos = [r["ano"] for r in orfas.select("ano").distinct().orderBy("ano").collect()]
-        print(f"  anos sem fato correspondente: {anos_orfaos}")
-        print("  Anos futuros não possuem medição. Um ano com medição publicada "
-              "listado acima indica falha de chave no join.")
+    if not n_orfas:
+        return
+
+    # A contagem por ano é o que torna o diagnóstico utilizável. Um ano futuro
+    # aparece com 100% de órfãs (não há medição publicada). Um ano com medição
+    # aparece com um resíduo pequeno, correspondente a territórios que têm meta
+    # projetada mas cujo resultado o INEP não divulgou. Uma proporção alta num ano
+    # com medição indica falha de chave no join.
+    total_por_ano = {r["ano"]: r["n"] for r in
+                     meta_df.groupBy("ano").agg(F.count("*").alias("n")).collect()}
+    print("  órfãs por ano:")
+    for r in orfas.groupBy("ano").agg(F.count("*").alias("n")).orderBy("ano").collect():
+        base = total_por_ano.get(r["ano"], 0)
+        pct = (r["n"] / base * 100) if base else 0.0
+        marca = "ano sem medição publicada" if pct > 99.9 else "resíduo — verificar"
+        print(f"    {r['ano']}: {r['n']:,} de {base:,} ({pct:.1f}%) — {marca}")
 
 print("Reconciliação das metas (Bronze -> Silver)")
 reconciliar_meta("meta_brasil", meta_br if existe("bronze", "meta_brasil") else None, ["ano"])
