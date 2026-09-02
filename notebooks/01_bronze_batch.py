@@ -1,14 +1,24 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 01 — Bronze Batch (P2)
-# MAGIC Lê as fontes e grava em Delta (bruto). Bronze = sem transformação.
+# MAGIC Lê as fontes oficiais preparadas em `data/raw/` e grava em Delta sem transformação de negócio.
 # MAGIC
-# MAGIC ## Como subir os dados (P2)
-# MAGIC 1. Menu lateral: **Catalog → workspace → bronze → raw_files**
-# MAGIC 2. Clique em **Upload to this volume**
-# MAGIC 3. Suba cada CSV e use o caminho `/Volumes/workspace/bronze/raw_files/nome_arquivo.csv`
+# MAGIC ## Como subir os dados
+# MAGIC 1. Execute `scripts/gerar_fontes.py`
+# MAGIC 2. Valide os arquivos gerados em `data/raw/`
+# MAGIC 3. Menu lateral: **Catalog → workspace → bronze → raw_files**
+# MAGIC 4. Clique em **Upload to this volume**
+# MAGIC 5. Suba os arquivos gerados para `/Volumes/workspace/bronze/raw_files/`
+# MAGIC 6. Microdados oficiais: `/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/TS_ALUNO.csv`
+# MAGIC
+# MAGIC **Regra:** a Bronze não gera, interpola ou simula dados.
 
 # COMMAND ----------
+
 from pyspark.sql.types import (
     StructType,
     StructField,
@@ -25,6 +35,8 @@ from pyspark.sql.functions import (
     lit
 )
 
+# COMMAND ----------
+
 # run_id injetado pelo Workflow ({{job.run_id}} em workflows/job_pipeline.json)
 # para correlacionar todas as tasks de uma execução; standalone gera um novo.
 try:
@@ -34,9 +46,19 @@ except Exception:
 
 CATALOG = "workspace"
 VOLUME_RAW = f"/Volumes/{CATALOG}/bronze/raw_files"
+SCHEMA_VERSION = "2.0"
 
-# Schema explícito da Avaliação de Alfabetização
-schema_avaliacao = StructType([
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 1. Avaliação de alfabetização — UF
+# MAGIC
+# MAGIC Fonte oficial do INEP distribuída via Base dos Dados.
+# MAGIC O conteúdo é ingerido sem transformação de negócio.
+
+# COMMAND ----------
+
+schema_avaliacao_uf = StructType([
     StructField("ano", IntegerType(), False),
     StructField("sigla_uf", StringType(), False),
     StructField("serie", IntegerType(), False),
@@ -54,159 +76,55 @@ schema_avaliacao = StructType([
     StructField("proporcao_aluno_nivel_8", DoubleType(), True)
 ])
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 1. Avaliação Alfabetização (SAEB)
-
-# COMMAND ----------
-df_avaliacao = (
+df_avaliacao_uf = (
     spark.read
         .option("header", True)
-        .schema(schema_avaliacao)
+        .schema(schema_avaliacao_uf)
         .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_uf.csv.gz")
-)
-
-print("Schema aplicado com sucesso:")
-
-# _metadata.file_path substitui input_file_name(), que não é suportado no
-# compute serverless com Unity Catalog.
-df_avaliacao = (
-    df_avaliacao
         .withColumn("ingestion_timestamp", current_timestamp())
         .withColumn("source_file", col("_metadata.file_path"))
-        .withColumn("source_system", lit("basedosdados_inep"))
+        .withColumn("source_system", lit("INEP via Base dos Dados"))
         .withColumn("pipeline_run_id", lit(RUN_ID))
-        .withColumn("schema_version", lit("1.0"))
+        .withColumn("schema_version", lit(SCHEMA_VERSION))
 )
 
-df_avaliacao.printSchema()
+df_avaliacao_uf.printSchema()
+
+origem_uf = df_avaliacao_uf.count()
+
 (
-    df_avaliacao.write
+    df_avaliacao_uf.write
         .format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
-        # FinOps: tabela de ~150 linhas — particionar só criaria overhead de
-        # arquivos pequenos (ver seção FinOps do README).
-        # Idempotência: overwrite evita duplicar a fonte a cada reexecução;
-        # o histórico de versões é preservado pelo Delta (time travel /
-        # DESCRIBE HISTORY), atendendo ao requisito de histórico da Bronze.
         .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao")
 )
 
-origem = df_avaliacao.count()
-
-print(f"✓ avaliacao_alfabetizacao gravada: {origem:,} linhas")
-
-destino = spark.table(
+destino_uf = spark.table(
     f"{CATALOG}.bronze.avaliacao_alfabetizacao"
 ).count()
 
-print(f"Origem : {origem}")
-print(f"Destino: {destino}")
-
-if origem == destino:
-    print("✓ Reconciliação realizada com sucesso.")
-else:
-    raise Exception(
-        f"Falha na reconciliação: origem={origem}, destino={destino}"
+if origem_uf != destino_uf:
+    raise RuntimeError(
+        f"Falha de reconciliação UF: origem={origem_uf}, destino={destino_uf}"
     )
 
+print(f"✓ avaliacao_alfabetizacao: {destino_uf:,} linhas")
+
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## 2. Demais fontes (P2)
+# MAGIC ## 2. Avaliação de alfabetização — Município
+# MAGIC
+# MAGIC Indicador municipal oficial extraído da planilha do INEP por
+# MAGIC `scripts/gerar_fontes.py`.
+# MAGIC
+# MAGIC Esta fonte agora é **obrigatória**: os marts municipais não podem ser
+# MAGIC alimentados por dados simulados.
 
 # COMMAND ----------
-# Schemas explícitos (contrato, seção 2): evita drift silencioso de tipos que
-# o inferSchema causaria entre execuções. Coerente com a prática do arquivo 1.
-schema_uf = StructType([
-    StructField("codigo_uf", IntegerType(), True),
-    StructField("sigla_uf", StringType(), False),
-    StructField("nome", StringType(), True),
-    StructField("regiao", StringType(), True),
-])
-schema_municipio = StructType([
-    StructField("id_municipio", StringType(), False),
-    StructField("nome", StringType(), True),
-    StructField("sigla_uf", StringType(), False),
-    StructField("capital", IntegerType(), True),
-    StructField("latitude", DoubleType(), True),
-    StructField("longitude", DoubleType(), True),
-])
-schema_meta_brasil = StructType([
-    StructField("ano", IntegerType(), False),
-    StructField("meta", DoubleType(), False),
-    StructField("metodologia", StringType(), True),
-])
-schema_meta_uf = StructType([
-    StructField("sigla_uf", StringType(), False),
-    StructField("ano", IntegerType(), False),
-    StructField("meta", DoubleType(), False),
-    StructField("metodologia", StringType(), True),
-])
-schema_meta_municipio = StructType([
-    StructField("id_municipio", StringType(), False),
-    StructField("sigla_uf", StringType(), False),
-    StructField("ano", IntegerType(), False),
-    StructField("meta", DoubleType(), False),
-    StructField("metodologia", StringType(), True),
-])
-schema_alunos = StructType([
-    StructField("aluno_id", StringType(), False),
-    StructField("ano", IntegerType(), False),
-    StructField("sigla_uf", StringType(), False),
-    StructField("serie", IntegerType(), True),
-    StructField("rede", IntegerType(), True),
-    StructField("proficiencia_portugues", DoubleType(), True),
-    StructField("fonte", StringType(), True),
-])
 
-# FinOps: nenhuma dessas tabelas é particionada — todas são pequenas (27 a
-# ~5.5k linhas) e particionar só criaria overhead de small files (ver README).
-arquivos_p2 = {
-    "uf":             (f"{VOLUME_RAW}/uf.csv",             schema_uf),
-    "municipio":      (f"{VOLUME_RAW}/municipio.csv",      schema_municipio),
-    "meta_brasil":    (f"{VOLUME_RAW}/meta_brasil.csv",    schema_meta_brasil),
-    "meta_uf":        (f"{VOLUME_RAW}/meta_uf.csv",        schema_meta_uf),
-    "meta_municipio": (f"{VOLUME_RAW}/meta_municipio.csv", schema_meta_municipio),
-    "alunos":         (f"{VOLUME_RAW}/alunos_simulados.csv.gz", schema_alunos),
-}
-
-for tabela, (path, schema) in arquivos_p2.items():
-    try:
-        df = (
-            spark.read
-                .option("header", True)
-                .schema(schema)
-                .csv(path)
-                .withColumn("ingestion_timestamp", current_timestamp())
-                .withColumn("source_file", col("_metadata.file_path"))
-                .withColumn("pipeline_run_id", lit(RUN_ID))
-        )
-
-        (
-            df.write
-                .format("delta")
-                .mode("overwrite")
-                .option("overwriteSchema", "true")
-                .saveAsTable(f"{CATALOG}.bronze.{tabela}")
-        )
-
-        print(f"✓ {tabela}: {df.count():,} linhas")
-
-    except Exception as e:
-        print(f"⚠ {tabela}: arquivo não encontrado — aguardando P2 ({e})")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 3. (Recomendado) Indicador oficial no grão MUNICÍPIO
-# MAGIC A Base dos Dados publica o Indicador Criança Alfabetizada também por
-# MAGIC município (`basedosdados.br_inep_indicador_crianca_alfabetizada`, tabela
-# MAGIC `municipio`). Baixe o CSV e suba como
-# MAGIC `br_inep_avaliacao_alfabetizacao_municipio.csv.gz` no Volume: a Silver (03)
-# MAGIC passa a alimentar os marts municipais com dado OFICIAL, não só simulado.
-
-# COMMAND ----------
-schema_avaliacao_mun = StructType([
+schema_avaliacao_municipio = StructType([
     StructField("ano", IntegerType(), False),
     StructField("sigla_uf", StringType(), False),
     StructField("id_municipio", StringType(), False),
@@ -216,43 +134,278 @@ schema_avaliacao_mun = StructType([
     StructField("media_portugues", DoubleType(), True),
 ])
 
-try:
-    df_mun = (
+df_avaliacao_municipio = (
+    spark.read
+        .option("header", True)
+        .schema(schema_avaliacao_municipio)
+        .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_municipio.csv.gz")
+        .withColumn("ingestion_timestamp", current_timestamp())
+        .withColumn("source_file", col("_metadata.file_path"))
+        .withColumn("source_system", lit("INEP oficial"))
+        .withColumn("pipeline_run_id", lit(RUN_ID))
+        .withColumn("schema_version", lit(SCHEMA_VERSION))
+)
+
+origem_municipio = df_avaliacao_municipio.count()
+
+(
+    df_avaliacao_municipio.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao_municipio")
+)
+
+destino_municipio = spark.table(
+    f"{CATALOG}.bronze.avaliacao_alfabetizacao_municipio"
+).count()
+
+if origem_municipio != destino_municipio:
+    raise RuntimeError(
+        "Falha de reconciliação do indicador municipal: "
+        f"origem={origem_municipio}, destino={destino_municipio}"
+    )
+
+print(
+    "✓ avaliacao_alfabetizacao_municipio: "
+    f"{destino_municipio:,} linhas"
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. Dimensões territoriais e metas oficiais
+# MAGIC
+# MAGIC - `uf.csv` e `municipio.csv`: dimensões territoriais IBGE.
+# MAGIC - `meta_brasil.csv`, `meta_uf.csv`, `meta_municipio.csv`: metas oficiais do INEP.
+# MAGIC
+# MAGIC Nenhuma meta é calculada nesta camada.
+
+# COMMAND ----------
+
+schema_uf = StructType([
+    StructField("codigo_uf", IntegerType(), True),
+    StructField("sigla_uf", StringType(), False),
+    StructField("nome", StringType(), True),
+    StructField("regiao", StringType(), True),
+])
+
+schema_municipio = StructType([
+    StructField("id_municipio", StringType(), False),
+    StructField("nome", StringType(), True),
+    StructField("sigla_uf", StringType(), False),
+    StructField("capital", IntegerType(), True),
+    StructField("latitude", DoubleType(), True),
+    StructField("longitude", DoubleType(), True),
+])
+
+schema_meta_brasil = StructType([
+    StructField("ano", IntegerType(), False),
+    StructField("meta", DoubleType(), False),
+    StructField("metodologia", StringType(), True),
+])
+
+schema_meta_uf = StructType([
+    StructField("sigla_uf", StringType(), False),
+    StructField("ano", IntegerType(), False),
+    StructField("meta", DoubleType(), False),
+    StructField("metodologia", StringType(), True),
+])
+
+schema_meta_municipio = StructType([
+    StructField("id_municipio", StringType(), False),
+    StructField("sigla_uf", StringType(), False),
+    StructField("ano", IntegerType(), False),
+    StructField("meta", DoubleType(), False),
+    StructField("metodologia", StringType(), True),
+])
+
+arquivos_batch = {
+    "uf": {
+        "path": f"{VOLUME_RAW}/uf.csv",
+        "schema": schema_uf,
+        "source_system": "IBGE",
+    },
+    "municipio": {
+        "path": f"{VOLUME_RAW}/municipio.csv",
+        "schema": schema_municipio,
+        "source_system": "IBGE",
+    },
+    "meta_brasil": {
+        "path": f"{VOLUME_RAW}/meta_brasil.csv",
+        "schema": schema_meta_brasil,
+        "source_system": "INEP oficial",
+    },
+    "meta_uf": {
+        "path": f"{VOLUME_RAW}/meta_uf.csv",
+        "schema": schema_meta_uf,
+        "source_system": "INEP oficial",
+    },
+    "meta_municipio": {
+        "path": f"{VOLUME_RAW}/meta_municipio.csv",
+        "schema": schema_meta_municipio,
+        "source_system": "INEP oficial",
+    },
+}
+
+for tabela, config in arquivos_batch.items():
+    path = config["path"]
+    schema = config["schema"]
+    source_system = config["source_system"]
+
+    df = (
         spark.read
             .option("header", True)
-            .schema(schema_avaliacao_mun)
-            .csv(f"{VOLUME_RAW}/br_inep_avaliacao_alfabetizacao_municipio.csv.gz")
+            .schema(schema)
+            .csv(path)
             .withColumn("ingestion_timestamp", current_timestamp())
             .withColumn("source_file", col("_metadata.file_path"))
-            .withColumn("source_system", lit("basedosdados_inep"))
+            .withColumn("source_system", lit(source_system))
             .withColumn("pipeline_run_id", lit(RUN_ID))
-            .withColumn("schema_version", lit("1.0"))
+            .withColumn("schema_version", lit(SCHEMA_VERSION))
     )
-    (df_mun.write.format("delta").mode("overwrite")
-        .option("overwriteSchema", "true")
-        .saveAsTable(f"{CATALOG}.bronze.avaliacao_alfabetizacao_municipio"))
-    print(f"✓ avaliacao_alfabetizacao_municipio: {df_mun.count():,} linhas (dado oficial)")
-except Exception as e:
-    print("⚠ indicador municipal oficial não encontrado no Volume — opcional, "
-          f"mas recomendado para os marts municipais ({type(e).__name__})")
+
+    origem = df.count()
+
+    (
+        df.write
+            .format("delta")
+            .mode("overwrite")
+            .option("overwriteSchema", "true")
+            .saveAsTable(f"{CATALOG}.bronze.{tabela}")
+    )
+
+    destino = spark.table(f"{CATALOG}.bronze.{tabela}").count()
+
+    if origem != destino:
+        raise RuntimeError(
+            f"Falha de reconciliação {tabela}: "
+            f"origem={origem}, destino={destino}"
+        )
+
+    print(f"✓ {tabela}: {destino:,} linhas")
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## Validação
+# MAGIC ## 4. Microdados oficiais de alunos — INEP
+# MAGIC
+# MAGIC Ingestão bruta do arquivo oficial `TS_ALUNO.csv`.
+# MAGIC A Bronze preserva os nomes e o conteúdo da fonte; normalizações e
+# MAGIC mapeamentos de negócio pertencem à Silver.
+# MAGIC
+# MAGIC **Não existe fallback para dados simulados.**
 
 # COMMAND ----------
-tabelas = [
+
+MICRO_ALUNOS = f"{VOLUME_RAW}/microdados_inep/DADOS/TS_ALUNO.csv"
+
+schema_alunos_oficial = StructType([
+    StructField("NU_ANO_AVALIACAO", IntegerType(), True),
+    StructField("CO_UF", IntegerType(), True),
+    StructField("SG_UF", StringType(), True),
+    StructField("ID_ALUNO", StringType(), True),
+    StructField("TP_SERIE", StringType(), True),
+    StructField("ID_ESCOLA", StringType(), True),
+    StructField("TP_DEPENDENCIA", IntegerType(), True),
+    StructField("CO_MUNICIPIO", StringType(), True),
+    StructField("NO_MUNICIPIO", StringType(), True),
+    StructField("IN_PRESENCA_LP", IntegerType(), True),
+    StructField("IN_PREENCHIMENTO_LP", IntegerType(), True),
+    StructField("CO_CADERNO_LP", StringType(), True),
+    # Mantidos como string na Bronze para preservar exatamente a representação
+    # textual da fonte oficial. Conversão numérica ocorre na Silver.
+    StructField("VL_PESO_ALUNO_LP", StringType(), True),
+    StructField("VL_PROFICIENCIA_LP", StringType(), True),
+    StructField("IN_ALFABETIZADO", IntegerType(), True),
+])
+
+df_alunos = (
+    spark.read
+        .option("header", True)
+        .option("sep", ";")
+        .option("encoding", "UTF-8")
+        .schema(schema_alunos_oficial)
+        .csv(MICRO_ALUNOS)
+        .withColumn("ingestion_timestamp", current_timestamp())
+        .withColumn("source_file", col("_metadata.file_path"))
+        .withColumn("source_system", lit("INEP oficial - AEEB 2024"))
+        .withColumn("pipeline_run_id", lit(RUN_ID))
+        .withColumn("schema_version", lit(SCHEMA_VERSION))
+)
+
+origem_alunos = df_alunos.count()
+
+(
+    df_alunos.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(f"{CATALOG}.bronze.alunos")
+)
+
+destino_alunos = spark.table(
+    f"{CATALOG}.bronze.alunos"
+).count()
+
+if origem_alunos != destino_alunos:
+    raise RuntimeError(
+        "Falha de reconciliação alunos: "
+        f"origem={origem_alunos}, destino={destino_alunos}"
+    )
+
+print(
+    f"✓ alunos: {destino_alunos:,} linhas "
+    "(microdados oficiais INEP)"
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 5. Validação da Bronze
+# MAGIC
+# MAGIC Todas as fontes obrigatórias desta etapa devem existir.
+# MAGIC Qualquer ausência encerra a execução com erro.
+
+# COMMAND ----------
+
+# Permite executar somente o bloco de validação em uma sessão em que as
+# tabelas já existam, sem depender do estado das células anteriores.
+CATALOG = globals().get("CATALOG", "workspace")
+
+tabelas_obrigatorias = [
     "avaliacao_alfabetizacao",
+    "avaliacao_alfabetizacao_municipio",
     "uf",
     "municipio",
     "meta_brasil",
     "meta_uf",
-    "meta_municipio"
+    "meta_municipio",
+    "alunos",
 ]
 
-for tabela in tabelas:
+falhas = []
+
+for tabela in tabelas_obrigatorias:
     try:
-        quantidade = spark.table(f"{CATALOG}.bronze.{tabela}").count()
-        print(f"✓ {tabela}: {quantidade:,} linhas")
+        quantidade = spark.table(
+            f"{CATALOG}.bronze.{tabela}"
+        ).count()
+
+        if quantidade <= 0:
+            falhas.append(f"{tabela}: tabela vazia")
+            print(f"✗ {tabela}: tabela vazia")
+        else:
+            print(f"✓ {tabela}: {quantidade:,} linhas")
+
     except Exception as e:
-        print(f"✗ {tabela}: {e}")
+        falhas.append(f"{tabela}: {type(e).__name__}: {e}")
+        print(f"✗ {tabela}: {type(e).__name__}: {e}")
+
+if falhas:
+    raise RuntimeError(
+        "Bronze incompleta. Falhas encontradas:\n- "
+        + "\n- ".join(falhas)
+    )
+
+print("\n✓ Bronze Batch concluída com todas as fontes oficiais.")

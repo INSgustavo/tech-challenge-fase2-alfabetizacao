@@ -1,9 +1,14 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 00 — Setup do ambiente
 # MAGIC Cria schemas, volumes e estrutura de observabilidade.
 
 # COMMAND ----------
+
 CATALOG = "workspace"
 
 for schema in ["bronze", "silver", "gold", "observability"]:
@@ -11,6 +16,7 @@ for schema in ["bronze", "silver", "gold", "observability"]:
     print(f"Schema disponível: {CATALOG}.{schema}")
 
 # COMMAND ----------
+
 for schema, volume in [
     ("bronze", "raw_files"),
     ("bronze", "streaming_landing"),
@@ -21,6 +27,7 @@ for schema, volume in [
     print(f"Volume disponível: /Volumes/{CATALOG}/{schema}/{volume}/")
 
 # COMMAND ----------
+
 spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {CATALOG}.observability.pipeline_metrics (
     run_id STRING,

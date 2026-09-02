@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 08 — Monitoramento e observabilidade (P3)
 # MAGIC Consolida volume e disponibilidade das tabelas, **latência do streaming**
@@ -6,17 +10,20 @@
 # MAGIC Tudo persistido em `observability.pipeline_metrics`.
 
 # COMMAND ----------
+
 import uuid
 from datetime import datetime, timezone
 
 from pyspark.sql import Row, functions as F
 
 CATALOG = "workspace"
+
 # run_id injetado pelo Workflow ({{job.run_id}}) para correlacionar as tasks.
 try:
     RUN_ID = dbutils.widgets.get("run_id") or str(uuid.uuid4())
 except Exception:
     RUN_ID = str(uuid.uuid4())
+
 started_at = datetime.now(timezone.utc)
 
 # Thresholds definidos pelo grupo
@@ -27,13 +34,26 @@ THRESHOLDS = {
     "max_rejection_rate": 0.05,
     "max_gold_age_hours": 26,
 }
+
 alertas = []
 
+print("✓ Monitoramento inicializado")
+print(f"run_id: {RUN_ID}")
+print(f"início: {started_at:%Y-%m-%d %H:%M:%S} UTC")
+print("\nThresholds ativos:")
+print(f"  Latência máxima : {THRESHOLDS['max_latency_seconds']}s")
+print(f"  Latência P95    : {THRESHOLDS['max_p95_latency_seconds']}s")
+print(f"  Eventos mínimos : {THRESHOLDS['min_events_total']}")
+print(f"  Rejeição máxima : {THRESHOLDS['max_rejection_rate']:.0%}")
+print(f"  Frescor da Gold : {THRESHOLDS['max_gold_age_hours']}h")
+
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Volume e disponibilidade por tabela
 
 # COMMAND ----------
+
 TABELAS = [
     f"{CATALOG}.bronze.avaliacao_alfabetizacao",
     f"{CATALOG}.bronze.uf",
@@ -71,10 +91,12 @@ for table in TABELAS:
     ))
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 2. Latência do streaming — percentis (event_time → ingestão)
 
 # COMMAND ----------
+
 lat_stats = None
 if spark.catalog.tableExists(f"{CATALOG}.bronze.eventos_streaming"):
     eventos = spark.table(f"{CATALOG}.bronze.eventos_streaming")
@@ -117,10 +139,12 @@ if spark.catalog.tableExists(f"{CATALOG}.bronze.eventos_streaming"):
         alertas.append("STREAMING SEM EVENTOS: bronze.eventos_streaming vazia")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. Taxa de rejeição acumulada e frescor da Gold
 
 # COMMAND ----------
+
 n_quarentena = spark.table(f"{CATALOG}.observability.quarantine_records").count()
 n_silver = spark.table(f"{CATALOG}.silver.medicoes_alfabetizacao").count()
 taxa_rej = n_quarentena / max(n_quarentena + n_silver, 1)
@@ -142,32 +166,103 @@ else:
         alertas.append(f"GOLD DESATUALIZADA: {idade_h:.0f}h desde o último refresh")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 4. Dashboard consolidado
 
 # COMMAND ----------
+
 print("═" * 70)
 print("  PIPELINE ALFABETIZAÇÃO — DASHBOARD DE MÉTRICAS")
 print("═" * 70)
-print(f"run_id: {RUN_ID} · {datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC\n")
 
+print(
+    f"run_id: {RUN_ID} · "
+    f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S} UTC\n"
+)
+
+# ---------------------------------------------------------
+# STATUS GERAL
+# ---------------------------------------------------------
+print("── STATUS GERAL ──")
+
+if alertas:
+    print(f"⚠ Pipeline com {len(alertas)} alerta(s)")
+else:
+    print("✅ Pipeline saudável")
+
+# ---------------------------------------------------------
+# QUALIDADE E FRESCOR
+# ---------------------------------------------------------
+print("\n── QUALIDADE E FRESCOR ──")
+
+print(f"Quarentena acumulada : {n_quarentena:,}")
+print(f"Taxa de rejeição     : {taxa_rej:.2%}")
+
+if freshness is not None:
+    print(f"Idade da Gold        : {idade_h:.2f}h")
+else:
+    print("Idade da Gold        : indisponível")
+
+# ---------------------------------------------------------
+# LATÊNCIA
+# ---------------------------------------------------------
+print("\n── LATÊNCIA DO STREAMING ──")
+
+if lat_stats is not None and lat_stats["total"] > 0:
+    print(f"Eventos              : {lat_stats['total']:,}")
+    print(f"Latência média       : {lat_stats['avg']:.2f}s")
+    print(f"P95                  : {lat_stats['p95']:.2f}s")
+    print(f"P99                  : {lat_stats['p99']:.2f}s")
+    print(f"Latência máxima      : {lat_stats['max']:.2f}s")
+else:
+    print("Sem eventos disponíveis para cálculo de latência.")
+
+# ---------------------------------------------------------
+# EVENTOS STREAMING
+# ---------------------------------------------------------
 if spark.catalog.tableExists(f"{CATALOG}.bronze.eventos_streaming"):
-    eventos = spark.table(f"{CATALOG}.bronze.eventos_streaming")
-    print("── VOLUME POR SOURCE ──")
-    eventos.groupBy("source").count().orderBy(F.desc("count")).show(truncate=False)
+
+    eventos = spark.table(
+        f"{CATALOG}.bronze.eventos_streaming"
+    )
+
+    print("\n── VOLUME POR SOURCE ──")
+
+    eventos.groupBy("source") \
+        .count() \
+        .orderBy(F.desc("count")) \
+        .show(truncate=False)
+
     print("── TOP UFs POR VOLUME DE EVENTOS ──")
-    eventos.groupBy("sigla_uf").count().orderBy(F.desc("count")).show(10, truncate=False)
+
+    eventos.groupBy("sigla_uf") \
+        .count() \
+        .orderBy(F.desc("count")) \
+        .show(10, truncate=False)
+
     ultima_hora = eventos.filter(
-        F.col("_ingestion_timestamp") >= F.expr("current_timestamp() - interval 1 hour")
+        F.col("_ingestion_timestamp")
+        >= F.expr(
+            "current_timestamp() - interval 1 hour"
+        )
     ).count()
-    print(f"Throughput última hora: {ultima_hora} eventos "
-          f"({ultima_hora / 60:.2f}/min)")
+
+    print(
+        f"Throughput última hora: "
+        f"{ultima_hora} eventos "
+        f"({ultima_hora / 60:.2f}/min)"
+    )
+
+print("═" * 70)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 5. Persistência e alertas
 
 # COMMAND ----------
+
 # Schema explícito: max_event_time/error_message podem ser None em todas as
 # linhas e a inferência de tipos falharia (ValueError).
 schema_metrics = spark.table(f"{CATALOG}.observability.pipeline_metrics").schema

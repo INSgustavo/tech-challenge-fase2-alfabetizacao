@@ -336,7 +336,7 @@ Os 2.120.560 registros de alunos são agregados antes do join com a Silver.
 
 ## 3.2 `workspace.silver.medicoes_aprovadas`
 
-**Descrição:** versão aprovada da Silver territorial e fonte dos quatro marts territoriais da Gold.
+**Descrição:** versão da Silver liberada pelo Quality Gate e única fonte permitida para a Gold.
 
 Possui o mesmo contrato de `silver.medicoes_alfabetizacao`, limitado aos registros aprovados.
 
@@ -350,73 +350,6 @@ A publicação ocorre somente depois de:
 - unicidade de `record_id`;
 - cobertura mínima de 80%;
 - validações de domínio e integridade referencial.
-
----
-
-## 3.3 `workspace.silver.alunos_modelagem`
-
-**Descrição:** Silver oficial no grão individual de aluno, criada a partir de `workspace.bronze.alunos` para preservar a base necessária à modelagem supervisionada da Fase 3.
-
-**Grão:** 1 linha = 1 aluno  
-**Volume reconciliado:** 2.120.560 registros
-
-| Campo | Tipo lógico | Descrição |
-|---|---|---|
-| `record_id` | string | SHA-256 determinístico da observação de aluno. |
-| `id_aluno` | string | Identificador do aluno na fonte oficial. |
-| `ano` | int | Ano da avaliação. |
-| `sigla_uf` | string | UF normalizada. |
-| `nome_uf` | string | Nome da UF via dimensão IBGE. |
-| `regiao` | string | Região do Brasil. |
-| `id_municipio` | string | Código IBGE com 7 dígitos. |
-| `nome_municipio` | string | Nome do município via dimensão. |
-| `nome_municipio_fonte` | string | Nome do município conforme microdado oficial. |
-| `capital` | int | Indicador de capital vindo da dimensão municipal. |
-| `serie` | int | Série avaliada. |
-| `id_escola` | string | Identificador da escola. |
-| `tp_dependencia` | int | Código original de dependência administrativa. |
-| `rede` | int | Rede normalizada para o domínio do projeto. |
-| `rede_label` | string | Rótulo da rede. |
-| `presenca_lp` | int | Indicador de presença em Língua Portuguesa. |
-| `preenchimento_lp` | int | Indicador de preenchimento da avaliação. |
-| `caderno_lp` | string | Código do caderno de Língua Portuguesa. |
-| `peso_aluno_lp` | double | Peso do aluno na avaliação. |
-| `proficiencia_portugues` | double | Proficiência oficial, mantida na Silver para QA e análises controladas. |
-| `alfabetizado_oficial` | int | Target oficial do INEP, domínio 0/1. |
-| `alfabetizado_regra_743` | int | Flag auxiliar derivada do corte 743 para validação; não deve ser usada como feature junto do target oficial. |
-| `uf_consistente` | boolean | Consistência entre UF do aluno e UF da dimensão municipal. |
-| `source` | string | Identificação da origem dos microdados. |
-| `fonte_dados` | string | `oficial_inep`. |
-| `schema_version` | string | Versão do schema. |
-| `processed_at` | timestamp | Timestamp da transformação. |
-
-Validações de reconciliação executadas:
-
-```text
-Bronze alunos:              2.120.560
-Silver alunos:              2.120.560
-Target oficial válido 0/1:  2.120.560
-Proficiência disponível:    1.851.852
-```
-
----
-
-## 3.4 `workspace.silver.alunos_modelagem_aprovados`
-
-**Descrição:** versão de `silver.alunos_modelagem` liberada pelo Quality Gate específico de alunos e única fonte da Gold de modelagem.
-
-**Volume validado:** 2.120.560 registros  
-**Registros rejeitados:** 0  
-**Cobertura validada:** 100%
-
-Checks sistêmicos validados:
-
-```text
-silver_alunos_nao_vazia
-alunos_aprovados_maior_que_zero
-record_id_aluno_unico
-cobertura_alunos_min_80%
-```
 
 ---
 
@@ -533,49 +466,6 @@ cobertura_alunos_min_80%
 
 ---
 
-## 4.5 `workspace.gold.base_modelagem_aluno`
-
-**Grão:** 1 linha = 1 aluno
-
-**Volume validado:** 2.120.560 registros  
-**Origem:** 2.120.560 registros de `workspace.silver.alunos_modelagem_aprovados`  
-**Fonte:** 100% oficial INEP
-
-Esta tabela é a base Gold preparada para a classificação supervisionada da Fase 3.
-
-| Campo | Tipo lógico | Descrição |
-|---|---|---|
-| `record_id` | string | Identificador determinístico e único da observação. |
-| `id_aluno` | string | Identificador do aluno. |
-| `ano` | int | Ano da avaliação. |
-| `sigla_uf` | string | UF. |
-| `nome_uf` | string | Nome da UF. |
-| `regiao` | string | Região. |
-| `id_municipio` | string | Código IBGE do município. |
-| `nome_municipio` | string | Nome do município. |
-| `capital` | int | Indicador de capital. |
-| `serie` | int | Série avaliada. |
-| `id_escola` | string | Identificador da escola. |
-| `tp_dependencia` | int | Dependência administrativa original. |
-| `rede` | int | Rede normalizada. |
-| `rede_label` | string | Rótulo da rede. |
-| `presenca_lp` | int | Presença em Língua Portuguesa. |
-| `preenchimento_lp` | int | Preenchimento da avaliação. |
-| `caderno_lp` | string | Código do caderno. |
-| `peso_aluno_lp` | double | Peso do aluno. |
-| `alfabetizado_oficial` | int | **Target oficial** da futura classificação, domínio 0/1. |
-| `uf_consistente` | boolean | Integridade territorial validada. |
-| `source` | string | Origem técnica. |
-| `fonte_dados` | string | `oficial_inep`. |
-| `schema_version` | string | Versão do contrato. |
-| `processed_at` | timestamp | Timestamp da transformação Silver que originou a Gold. |
-
-### Prevenção de data leakage
-
-`proficiencia_portugues` e `alfabetizado_regra_743` **não são publicados nesta Gold de modelagem**. A proficiência está diretamente relacionada ao critério de 743 pontos e sua utilização como preditor do target de alfabetização produziria vazamento de informação.
-
----
-
 # 5. Domínio de rede utilizado no modelo canônico
 
 | Código | Rótulo |
@@ -622,7 +512,7 @@ Esse de-para deve permanecer rastreável à documentação oficial utilizada pel
 
 ## Quality Gate
 
-Checks sistêmicos da Silver territorial:
+Checks sistêmicos atuais:
 
 ```text
 silver_nao_vazia
@@ -636,23 +526,6 @@ Execução validada:
 ```text
 Cobertura: 100%
 Silver aprovada: 10.737 registros
-```
-
-Checks sistêmicos da Silver de alunos:
-
-```text
-silver_alunos_nao_vazia
-alunos_aprovados_maior_que_zero
-record_id_aluno_unico
-cobertura_alunos_min_80%
-```
-
-Execução validada:
-
-```text
-Cobertura alunos: 100%
-Silver alunos aprovada: 2.120.560 registros
-Reprovados: 0
 ```
 
 ---
@@ -673,34 +546,24 @@ e não alimentam a pipeline oficial.
 
 # 8. Preparação para a Fase 3
 
-O enunciado da Fase 3 exige modelagem supervisionada no **grão de aluno**. Essa base já foi preparada na Fase 2 e publicada após Quality Gate.
+O enunciado da Fase 3 exige modelagem supervisionada no **grão de aluno**, utilizando dados derivados da fundação criada na Fase 2.
 
-Fluxo implementado:
+A tabela oficial que preserva esse grão atualmente é:
 
 ```text
 workspace.bronze.alunos
-        ↓
-workspace.silver.alunos_modelagem
-        ↓
-workspace.silver.alunos_modelagem_aprovados
-        ↓
-workspace.gold.base_modelagem_aluno
 ```
 
-**Volume final da Gold de modelagem:** 2.120.560 registros oficiais.
+A Gold atual da Fase 2 é composta por marts agregados territoriais. Portanto, uma futura base analítica de aluno para a Fase 3 deverá ser criada explicitamente a partir dos microdados oficiais e de enriquecimentos territoriais/socioeconômicos.
 
-Target preparado:
+Essa futura tabela **ainda não faz parte deste dicionário como tabela implementada**.
 
-```text
-alfabetizado_oficial
-```
+Ponto crítico para a modelagem futura:
 
-Pontos críticos para a modelagem:
-
-- `alfabetizado_oficial` é o target oficial validado em domínio 0/1;
-- `proficiencia_portugues` foi mantida fora da Gold de modelagem para evitar data leakage relacionado ao corte de 743 pontos;
-- `ID_ALUNO` e `ID_ESCOLA` são identificadores e devem ser avaliados antes de qualquer uso como features;
-- variáveis socioeconômicas e demais enriquecimentos complementares podem ser incorporados na Fase 3, com contrato e proveniência próprios.
+- `IN_ALFABETIZADO` pode representar o target oficial após validação;
+- `VL_PROFICIENCIA_LP` não deve ser usado como feature se o target for definido diretamente pela classificação de alfabetização, pois isso pode gerar data leakage;
+- identificadores como `ID_ALUNO` e `ID_ESCOLA` exigem avaliação antes de serem utilizados como features;
+- enriquecimentos socioeconômicos pertencem à Fase 3.
 
 ---
 
@@ -708,5 +571,5 @@ Pontos críticos para a modelagem:
 
 - validar e manter evidência documental do de-para oficial de `TP_DEPENDENCIA` / `rede`;
 - manter rastreabilidade da regra dos 743 pontos;
-- manter o contrato da base de modelagem sincronizado com qualquer nova feature incluída na Fase 3;
+- criar, na Fase 3, o contrato específico da base de modelagem no grão de aluno antes do treinamento;
 - versionar qualquer nova variável socioeconômica ou educacional incluída no modelo.

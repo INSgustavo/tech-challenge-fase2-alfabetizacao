@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # 03 — Silver canônica
 # MAGIC Normaliza chaves, **integra as seis fontes do edital** e publica o modelo
@@ -9,10 +13,11 @@
 # MAGIC    associadas a cada medição conforme o grão (join);
 # MAGIC 4. `bronze.alunos` — agregado por ano+UF+rede como enriquecimento (join).
 # MAGIC
-# MAGIC Cada registro sai com `fonte_dados` ('oficial_inep' | 'simulado') para que
-# MAGIC os consumidores saibam distinguir dado real de dado do simulador.
+# MAGIC Cada registro analítico sai com `fonte_dados = 'oficial_inep'`.
+# MAGIC Dados simulados não participam mais da Silver oficial.
 
 # COMMAND ----------
+
 CATALOG = "workspace"
 import sys
 from pyspark.sql import functions as F
@@ -36,10 +41,12 @@ def existe(schema, name):
     return spark.catalog.tableExists(tbl(schema, name))
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Fatos — batch (grão UF, dado oficial)
 
 # COMMAND ----------
+
 batch = spark.table(tbl("bronze", "avaliacao_alfabetizacao"))
 
 # A fonte batch (avaliação SAEB agregada) tem grão UF — NÃO existe id_municipio
@@ -65,14 +72,14 @@ batch_canonical = (
 )
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## 1b. Fatos — batch municipal (dado oficial, se disponível)
-# MAGIC A Base dos Dados também publica o indicador no grão município
-# MAGIC (`br_inep_indicador_crianca_alfabetizada`, tabela `municipio`). Se o P2
-# MAGIC subir esse CSV (ver notebooks/01), ele entra aqui como dado OFICIAL no
-# MAGIC grão municipal — os marts municipais deixam de depender só do simulador.
+# MAGIC ## 1b. Fatos — batch municipal (dado oficial obrigatório)
+# MAGIC O indicador municipal oficial já é ingerido na Bronze.
+# MAGIC Não existe mais fallback para dado simulado.
 
 # COMMAND ----------
+
 if existe("bronze", "avaliacao_alfabetizacao_municipio"):
     batch_mun = spark.table(tbl("bronze", "avaliacao_alfabetizacao_municipio"))
     batch_mun_canonical = (
@@ -97,17 +104,23 @@ if existe("bronze", "avaliacao_alfabetizacao_municipio"):
     )
     print(f"✓ dado oficial municipal encontrado: {batch_mun_canonical.count():,} registros")
 else:
-    batch_mun_canonical = None
-    print("⚠ bronze.avaliacao_alfabetizacao_municipio não existe — marts municipais "
-          "usarão apenas eventos do simulador (marcados fonte_dados='simulado').")
+    raise RuntimeError(
+        "bronze.avaliacao_alfabetizacao_municipio não existe. "
+        "A Silver não pode usar dado simulado como fallback."
+    )
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## 2. Fatos — streaming (grão município, dado simulado)
+# MAGIC ## 2. Fatos — streaming (grão município, replay de dado oficial)
 
 # COMMAND ----------
+
 if existe("bronze", "eventos_streaming"):
-    events = spark.table(tbl("bronze", "eventos_streaming"))
+    events = (
+        spark.table(tbl("bronze", "eventos_streaming"))
+        .filter(F.col("source") == "INEP_OFICIAL_REPLAY")
+    )
     stream_canonical = (
         events
         .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
@@ -116,18 +129,21 @@ if existe("bronze", "eventos_streaming"):
         .withColumn("serie", F.lit(None).cast("int"))
         .withColumn("rede", F.col("rede").cast("int"))
         .withColumn("rede_label", rede_mapping[F.col("rede")])
+        .withColumn("taxa_alfabetizacao", F.col("taxa_alfabetizacao").cast("double") / 100.0)
         .withColumn("media_portugues", F.lit(None).cast("double"))
         .withColumn("alfabetizado", F.lit(None).cast("boolean"))
-        .withColumn("fonte_dados", F.lit("simulado"))
+        .withColumn("fonte_dados", F.lit("oficial_inep"))
     )
 else:
     stream_canonical = spark.createDataFrame([], batch_canonical.schema)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. União dos fatos
 
 # COMMAND ----------
+
 columns = [
     "ano", "sigla_uf", "id_municipio", "grao", "serie", "rede", "rede_label",
     "media_portugues", "taxa_alfabetizacao", "alfabetizado",
@@ -140,12 +156,14 @@ if batch_mun_canonical is not None:
 fatos = fatos.unionByName(stream_canonical.select(*columns), allowMissingColumns=True)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 4. Integração com as dimensões territoriais (município e UF)
 # MAGIC Joins com `bronze.municipio` e `bronze.uf` — aqui ocorre a integração das
 # MAGIC bases exigida pelo edital, e não apenas a união batch+streaming.
 
 # COMMAND ----------
+
 if existe("bronze", "municipio"):
     dim_mun = (
         spark.table(tbl("bronze", "municipio"))
@@ -190,12 +208,14 @@ else:
              .withColumn("regiao", F.lit(None).cast("string")))
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 5. Integração com as metas (Brasil, UF e município)
 # MAGIC Cada medição recebe a meta do seu grão (`meta_taxa`) e a meta nacional de
 # MAGIC referência (`meta_brasil`). Metas em 0-100 são normalizadas para 0-1.
 
 # COMMAND ----------
+
 def normalizar_meta(col):
     return F.when(col > 1.0, col / 100.0).otherwise(col)
 
@@ -237,72 +257,553 @@ if existe("bronze", "meta_brasil"):
 else:
     fatos = fatos.withColumn("meta_brasil", F.lit(None).cast("double"))
 
-# meta do grão da medição: município usa meta municipal, UF usa meta estadual
+# meta do grão da medição:
+# município usa EXCLUSIVAMENTE a meta municipal oficial;
+# UF usa EXCLUSIVAMENTE a meta estadual oficial.
+# Se a meta oficial não existir, permanece NULL — sem herança/fallback.
 fatos = fatos.withColumn(
     "meta_taxa",
-    F.when(F.col("grao") == "municipio", F.coalesce("meta_municipio", "meta_uf"))
+    F.when(F.col("grao") == "municipio", F.col("meta_municipio"))
      .otherwise(F.col("meta_uf")),
 )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 6. Integração com dados de alunos (agregado por ano + UF + rede)
 # MAGIC Microdados de alunos agregados e associados como enriquecimento: média de
 # MAGIC proficiência e % de alunos acima do corte de alfabetização (743).
 
 # COMMAND ----------
+
 if existe("bronze", "alunos"):
-    agg_alunos = (
+
+    alunos_canonical = (
         spark.table(tbl("bronze", "alunos"))
-        .withColumn("sigla_uf", F.upper(F.trim(F.col("sigla_uf"))))
-        .withColumn("ano", F.col("ano").cast("int"))
-        .withColumn("rede", F.col("rede").cast("int"))
-        .groupBy("ano", "sigla_uf", "rede")
-        .agg(
-            F.avg("proficiencia_portugues").alias("alunos_proficiencia_media"),
-            F.avg(F.when(F.col("proficiencia_portugues") >= ALFABETIZACAO_CORTE, 1.0)
-                   .otherwise(0.0)).alias("alunos_pct_alfabetizados"),
-            F.count("*").alias("alunos_amostra"),
+        .select(
+            # ano oficial
+            F.col("NU_ANO_AVALIACAO")
+             .cast("int")
+             .alias("ano"),
+
+            # UF oficial
+            F.upper(
+                F.trim(F.col("SG_UF"))
+            ).alias("sigla_uf"),
+
+            # compatibilidade com o código de rede usado no projeto
+            F.when(
+                F.col("TP_DEPENDENCIA").cast("int") == 4,
+                F.lit(5)
+            ).otherwise(
+                F.col("TP_DEPENDENCIA").cast("int")
+            ).alias("rede"),
+
+            # proficiência oficial
+            F.regexp_replace(
+                F.trim(F.col("VL_PROFICIENCIA_LP")),
+                ",",
+                "."
+            )
+            .cast("double")
+            .alias("proficiencia_portugues")
+        )
+        .filter(
+            F.col("ano").isNotNull()
+            & F.col("sigla_uf").isNotNull()
+            & F.col("rede").isNotNull()
+            & F.col("proficiencia_portugues").isNotNull()
         )
     )
-    fatos = fatos.join(agg_alunos, on=["ano", "sigla_uf", "rede"], how="left")
+
+    agg_alunos = (
+        alunos_canonical
+
+        .groupBy(
+            "ano",
+            "sigla_uf",
+            "rede"
+        )
+
+        .agg(
+            F.avg(
+                "proficiencia_portugues"
+            ).alias(
+                "alunos_proficiencia_media"
+            ),
+
+            F.avg(
+                F.when(
+                    F.col("proficiencia_portugues")
+                    >= ALFABETIZACAO_CORTE,
+                    1.0
+                ).otherwise(0.0)
+            ).alias(
+                "alunos_pct_alfabetizados"
+            ),
+
+            F.count("*").alias(
+                "alunos_amostra"
+            )
+        )
+    )
+
+    fatos = fatos.join(
+        agg_alunos,
+        on=[
+            "ano",
+            "sigla_uf",
+            "rede"
+        ],
+        how="left"
+    )
+
 else:
-    fatos = (fatos
-             .withColumn("alunos_proficiencia_media", F.lit(None).cast("double"))
-             .withColumn("alunos_pct_alfabetizados", F.lit(None).cast("double"))
-             .withColumn("alunos_amostra", F.lit(None).cast("long")))
+    raise RuntimeError(
+        "bronze.alunos não existe. "
+        "A Silver exige os microdados oficiais do INEP."
+    )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 7. Chave determinística, dedup e publicação
 
 # COMMAND ----------
+
+if "sigla_uf" not in fatos.columns and "SG_UF" in fatos.columns:
+    fatos = fatos.withColumn(
+        "sigla_uf",
+        F.upper(F.trim(F.col("SG_UF")))
+    )
+
+if "ano" not in fatos.columns and "NU_ANO_AVALIACAO" in fatos.columns:
+    fatos = fatos.withColumn(
+        "ano",
+        F.col("NU_ANO_AVALIACAO").cast("int")
+    )
+
+if "id_municipio" not in fatos.columns and "CO_MUNICIPIO" in fatos.columns:
+    fatos = fatos.withColumn(
+        "id_municipio",
+        F.lpad(F.col("CO_MUNICIPIO").cast("string"), 7, "0")
+    )
+
+if "serie" not in fatos.columns and "TP_SERIE" in fatos.columns:
+    fatos = fatos.withColumn(
+        "serie",
+        F.col("TP_SERIE").cast("int")
+    )
+
+if "rede" not in fatos.columns and "TP_DEPENDENCIA" in fatos.columns:
+    fatos = fatos.withColumn(
+        "rede",
+        F.when(
+            F.col("TP_DEPENDENCIA").cast("int") == 4,
+            F.lit(5)
+        ).otherwise(
+            F.col("TP_DEPENDENCIA").cast("int")
+        )
+    )
+
+if "source" not in fatos.columns:
+    fatos = fatos.withColumn(
+        "source",
+        F.lit("oficial_inep")
+    )
+
+if "event_id" not in fatos.columns:
+    fatos = fatos.withColumn(
+        "event_id",
+        F.lit(None).cast("string")
+    )
+
+
+# Validação antes de gerar o record_id
+colunas_obrigatorias = [
+    "ano",
+    "sigla_uf",
+    "id_municipio",
+    "serie",
+    "rede",
+    "source",
+    "event_id",
+]
+
+faltantes = [
+    coluna
+    for coluna in colunas_obrigatorias
+    if coluna not in fatos.columns
+]
+
+if faltantes:
+    raise RuntimeError(
+        f"Silver com schema incompleto. "
+        f"Colunas ausentes: {faltantes}. "
+        f"Disponíveis: {fatos.columns}"
+    )
+
+
+# Chave determinística original
 silver = (
     fatos
+
     .withColumn(
         "record_id",
-        F.sha2(F.concat_ws("|",
-            F.col("ano"), F.col("sigla_uf"),
-            F.coalesce(F.col("id_municipio"), F.lit("uf")),
-            F.coalesce(F.col("serie").cast("string"), F.lit("na")),
-            F.col("rede"), F.col("source"),
-            F.coalesce(F.col("event_id"), F.lit("batch"))), 256),
+        F.sha2(
+            F.concat_ws(
+                "|",
+
+                F.col("ano").cast("string"),
+
+                F.col("sigla_uf"),
+
+                F.coalesce(
+                    F.col("id_municipio"),
+                    F.lit("uf")
+                ),
+
+                F.coalesce(
+                    F.col("serie").cast("string"),
+                    F.lit("na")
+                ),
+
+                F.col("rede").cast("string"),
+
+                F.col("source"),
+
+                F.coalesce(
+                    F.col("event_id"),
+                    F.lit("batch")
+                )
+            ),
+            256
+        )
     )
-    .withColumn("processed_at", F.current_timestamp())
+
+    .withColumn(
+        "processed_at",
+        F.current_timestamp()
+    )
+
     .dropDuplicates(["record_id"])
 )
 
+
+# Publicação Delta
 (
     silver.write
+        .format("delta")
+        .mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(
+            tbl("silver", "medicoes_alfabetizacao")
+        )
+)
+
+
+# Validação
+total = silver.count()
+
+com_dim = (
+    silver
+    .filter(F.col("nome_uf").isNotNull())
+    .count()
+)
+
+com_meta = (
+    silver
+    .filter(F.col("meta_taxa").isNotNull())
+    .count()
+)
+
+print(
+    f"✓ Silver gravada com {total:,} registros "
+    f"| {com_dim:,} enriquecidos com dimensão UF "
+    f"| {com_meta:,} com meta associada"
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # 8. Silver no grão de aluno para preparação da Fase 3
+
+# COMMAND ----------
+
+CATALOG = "workspace"
+
+ALUNOS_BRONZE = f"{CATALOG}.bronze.alunos"
+ALUNOS_SILVER = f"{CATALOG}.silver.alunos_modelagem"
+
+DIM_MUNICIPIO = f"{CATALOG}.bronze.municipio"
+DIM_UF = f"{CATALOG}.bronze.uf"
+
+if not spark.catalog.tableExists(ALUNOS_BRONZE):
+    raise RuntimeError(
+        f"{ALUNOS_BRONZE} não existe. "
+        "A Silver de alunos exige os microdados oficiais do INEP."
+    )
+
+alunos_raw = spark.table(ALUNOS_BRONZE)
+
+print(f"Bronze alunos: {alunos_raw.count():,} registros")
+
+# COMMAND ----------
+
+# Normalização dos campos oficiais do TS_ALUNO.csv.
+# Não agregamos: 1 linha continua representando 1 aluno.
+
+alunos_base = (
+    alunos_raw
+
+    .select(
+        F.col("ID_ALUNO").cast("string").alias("id_aluno"),
+        F.col("NU_ANO_AVALIACAO").cast("int").alias("ano"),
+
+        F.upper(
+            F.trim(F.col("SG_UF"))
+        ).alias("sigla_uf"),
+
+        F.lpad(
+            F.col("CO_MUNICIPIO").cast("string"),
+            7,
+            "0"
+        ).alias("id_municipio"),
+
+        F.col("NO_MUNICIPIO")
+         .cast("string")
+         .alias("nome_municipio_fonte"),
+
+        F.col("TP_SERIE")
+         .cast("int")
+         .alias("serie"),
+
+        F.col("ID_ESCOLA")
+         .cast("string")
+         .alias("id_escola"),
+
+        F.col("TP_DEPENDENCIA")
+         .cast("int")
+         .alias("tp_dependencia"),
+
+        F.col("IN_PRESENCA_LP")
+         .cast("int")
+         .alias("presenca_lp"),
+
+        F.col("IN_PREENCHIMENTO_LP")
+         .cast("int")
+         .alias("preenchimento_lp"),
+
+        F.col("CO_CADERNO_LP")
+         .cast("string")
+         .alias("caderno_lp"),
+
+        F.regexp_replace(
+            F.trim(F.col("VL_PESO_ALUNO_LP").cast("string")),
+            ",",
+            "."
+        ).cast("double").alias("peso_aluno_lp"),
+
+        F.regexp_replace(
+            F.trim(F.col("VL_PROFICIENCIA_LP").cast("string")),
+            ",",
+            "."
+        ).cast("double").alias("proficiencia_portugues"),
+
+        F.col("IN_ALFABETIZADO")
+         .cast("int")
+         .alias("alfabetizado_oficial"),
+    )
+
+    # Convenção já utilizada pelo projeto:
+    # TP_DEPENDENCIA 4 = privada -> rede 5.
+    .withColumn(
+        "rede",
+        F.when(F.col("tp_dependencia") == 4, F.lit(5))
+         .otherwise(F.col("tp_dependencia"))
+         .cast("int")
+    )
+
+    .withColumn(
+        "rede_label",
+        rede_mapping[F.col("rede")]
+    )
+
+    # Regra de 743 preservada para validação.
+    # NÃO deverá ser usada como feature do modelo da Fase 3.
+    .withColumn(
+        "alfabetizado_regra_743",
+        F.when(
+            F.col("proficiencia_portugues").isNotNull(),
+            F.when(
+                F.col("proficiencia_portugues") >= ALFABETIZACAO_CORTE,
+                F.lit(1)
+            ).otherwise(F.lit(0))
+        )
+    )
+)
+
+# COMMAND ----------
+
+# Enriquecimento com dimensão municipal.
+
+dim_municipio_aluno = (
+    spark.table(tbl("bronze", "municipio"))
+    .select(
+        F.lpad(
+            F.col("id_municipio").cast("string"),
+            7,
+            "0"
+        ).alias("id_municipio"),
+
+        F.col("nome")
+         .alias("nome_municipio"),
+
+        F.upper(
+            F.trim(F.col("sigla_uf"))
+        ).alias("sigla_uf_dim"),
+
+        F.col("capital")
+         .cast("int")
+         .alias("capital"),
+    )
+    .dropDuplicates(["id_municipio"])
+)
+
+alunos_base = (
+    alunos_base
+
+    .join(
+        dim_municipio_aluno,
+        on="id_municipio",
+        how="left"
+    )
+
+    .withColumn(
+        "uf_consistente",
+        F.when(
+            F.col("sigla_uf_dim").isNull(),
+            F.lit(None).cast("boolean")
+        ).otherwise(
+            F.col("sigla_uf") == F.col("sigla_uf_dim")
+        )
+    )
+
+    .drop("sigla_uf_dim")
+)
+
+# COMMAND ----------
+
+# Enriquecimento com dimensão UF.
+
+dim_uf_aluno = (
+    spark.table(tbl("bronze", "uf"))
+    .select(
+        F.upper(
+            F.trim(F.col("sigla_uf"))
+        ).alias("sigla_uf"),
+
+        F.col("nome")
+         .alias("nome_uf"),
+
+        F.col("regiao")
+    )
+    .dropDuplicates(["sigla_uf"])
+)
+
+alunos_base = alunos_base.join(
+    dim_uf_aluno,
+    on="sigla_uf",
+    how="left"
+)
+
+# COMMAND ----------
+
+# Identificador determinístico da observação de aluno.
+
+alunos_silver = (
+    alunos_base
+
+    .withColumn(
+        "record_id",
+        F.sha2(
+            F.concat_ws(
+                "|",
+                F.col("ano").cast("string"),
+                F.col("id_aluno"),
+                F.coalesce(
+                    F.col("id_escola"),
+                    F.lit("sem_escola")
+                )
+            ),
+            256
+        )
+    )
+
+    .withColumn(
+        "source",
+        F.lit("inep_microdados_alfabetizacao_2024")
+    )
+
+    .withColumn(
+        "fonte_dados",
+        F.lit("oficial_inep")
+    )
+
+    .withColumn(
+        "schema_version",
+        F.lit("1.0")
+    )
+
+    .withColumn(
+        "processed_at",
+        F.current_timestamp()
+    )
+)
+
+# COMMAND ----------
+
+# Publicação.
+# Aqui NÃO fazemos dropDuplicates:
+# duplicidade deve ser detectada pelo Quality Gate do notebook 06.
+
+(
+    alunos_silver.write
     .format("delta")
     .mode("overwrite")
     .option("overwriteSchema", "true")
-    .saveAsTable(tbl("silver", "medicoes_alfabetizacao"))
+    .saveAsTable(ALUNOS_SILVER)
 )
 
-total = silver.count()
-com_dim = silver.filter(F.col("nome_uf").isNotNull()).count()
-com_meta = silver.filter(F.col("meta_taxa").isNotNull()).count()
-print(f"Silver gravada com {total:,} registros "
-      f"| {com_dim:,} enriquecidos com dimensão UF "
-      f"| {com_meta:,} com meta associada")
+# COMMAND ----------
+
+# Reconciliação mínima Bronze -> Silver.
+
+rows_bronze_alunos = alunos_raw.count()
+rows_silver_alunos = spark.table(ALUNOS_SILVER).count()
+
+if rows_bronze_alunos != rows_silver_alunos:
+    raise RuntimeError(
+        "Falha de reconciliação da Silver de alunos: "
+        f"bronze={rows_bronze_alunos:,} "
+        f"silver={rows_silver_alunos:,}"
+    )
+
+targets_validos = (
+    alunos_silver
+    .filter(F.col("alfabetizado_oficial").isin([0, 1]))
+    .count()
+)
+
+proficiencias_validas = (
+    alunos_silver
+    .filter(F.col("proficiencia_portugues").isNotNull())
+    .count()
+)
+
+print("\n=== SILVER ALUNOS ===")
+print(f"✓ Origem Bronze: {rows_bronze_alunos:,}")
+print(f"✓ Silver alunos: {rows_silver_alunos:,}")
+print(f"✓ Target oficial 0/1: {targets_validos:,}")
+print(f"✓ Proficiência disponível: {proficiencias_validas:,}")
+print(f"✓ Tabela: {ALUNOS_SILVER}")

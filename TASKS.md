@@ -1,5 +1,9 @@
 # TASKS.md — Backlog do time
 
+Status atualizado em 2026-09-01.
+
+> Status do projeto: a entrega principal do pipeline foi concluída e validada. Os itens restantes abaixo representam evolução de roadmap, release final e continuidade operacional, e não invalidam a entrega atual.
+
 Use os marcadores abaixo como checklist. Cada item concluído deve ter evidência no PR, no notebook ou na documentação (prints em `docs/evidencias/`).
 
 ## Entregas compartilhadas
@@ -10,7 +14,7 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [x] Rodar o pipeline ponta a ponta com um único `run_id`. *(workflows/job_pipeline.json injeta `{{job.run_id}}` em todas as tasks)*
 - [x] Registrar evidências: prints, queries, métricas e amostras. *(32 prints em docs/evidencias/)*
 - [x] Ensaiar o roteiro de demonstração. *(docs/runbook.md + docs/video_roteiro.md)*
-- [ ] Criar tag da versão final.
+- [ ] Criar tag da versão final. *(pendente de release final / geração de tag no GitHub)*
 
 ## P1 — Plataforma, DevOps e governança
 
@@ -25,12 +29,12 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 ### Diferenciais
 
 - [x] Criar tabela `observability.pipeline_metrics`. *(notebook 00; usada por 06 e 08)*
-- [ ] Implementar função de auditoria reutilizável.
-- [ ] Adicionar GitHub Action para validar Python, JSON e Markdown. *(não entregue nesta fase)*
+- [ ] Implementar função de auditoria reutilizável. *(roadmap de governança e reutilização)*
+- [ ] Adicionar GitHub Action para validar Python, JSON e Markdown. *(não entregue nesta fase; backlog de CI/CD)*
 - [x] Criar runbook de falha, reprocessamento e demo. *(docs/runbook.md)*
 - [x] Configurar secrets para MongoDB. *(dbutils.secrets no notebook 05)*
 - [x] Documentar estratégia de custo baseada em métricas reais. *(README, seção FinOps)*
-- [ ] Criar release tag e changelog da entrega.
+- [ ] Criar release tag e changelog da entrega. *(pendente de fechamento oficial da versão)*
 
 ## P2 — Fontes, profiling e Bronze batch
 
@@ -101,5 +105,5 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [x] Quarentena e auditoria estão demonstráveis. *(evidências + tabelas observability)*
 - [x] Não há segredo versionado.
 - [x] O fluxo completo pode ser explicado em até dez minutos. *(docs/video_roteiro.md)*
-- [ ] Vídeo executivo gravado e link adicionado ao README.
-- [ ] Link do repositório GitHub (com histórico de commits, branches e PRs) incluído na entrega.
+- [ ] Vídeo executivo gravado e link adicionado ao README. *(entrega de comunicação / apresentação final)*
+- [ ] Link do repositório GitHub (com histórico de commits, branches e PRs) incluído na entrega. *(revisar no README antes da publicação final)*

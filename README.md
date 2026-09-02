@@ -1,341 +1,555 @@
 # Pipeline Híbrido de Alfabetização Infantil
 
-Pipeline Lakehouse para integrar dados educacionais em **batch e streaming**, aplicar regras de qualidade, construir indicadores por município e disponibilizar os resultados para análise, serving NoSQL e experimentos de Machine Learning.
+Pipeline Lakehouse para integrar dados oficiais de alfabetização em **batch e streaming**, aplicar regras de qualidade, construir indicadores por município e UF e disponibilizar resultados para análise, serving NoSQL, observabilidade e experimentos de Machine Learning.
 
 > Tech Challenge — Fase 2 · FIAP Pós Tech  
-> Plataforma principal: Databricks Free Edition · PySpark · Delta Lake
+> Plataforma principal: Databricks Free Edition · PySpark · Delta Lake · Unity Catalog
 
 <p align="center">
-  <img src="docs/architecture.png" alt="Arquitetura do pipeline" width="100%">
+  <img src="./docs/architecture.png" alt="Arquitetura do pipeline híbrido de alfabetização" width="100%">
 </p>
 
 ## Contexto do problema
 
-A alfabetização até o final do 2º ano do ensino fundamental é um dos pilares do
-desenvolvimento educacional e social do país. O **Compromisso Nacional Criança
-Alfabetizada** mobiliza União, estados e municípios com a meta de que, até 2030,
-todas as crianças brasileiras estejam alfabetizadas nessa etapa.
+A alfabetização até o final do 2º ano do ensino fundamental é um dos pilares do desenvolvimento educacional e social do país. O **Compromisso Nacional Criança Alfabetizada** mobiliza União, estados e municípios para ampliar a alfabetização das crianças brasileiras.
 
-Para dar régua a essa política, a Pesquisa Alfabetiza Brasil (INEP, 2023)
-definiu o **ponto de corte de 743 pontos** na escala de proficiência do Saeb:
-a partir dele, a criança é considerada alfabetizada. Nasce daí o **Indicador
-Criança Alfabetizada** — o percentual de estudantes que atingem esse patamar.
+A Pesquisa Alfabetiza Brasil definiu o **ponto de corte de 743 pontos** na escala de proficiência utilizada no projeto: no grão de aluno, registros com proficiência igual ou superior a 743 são classificados como alfabetizados.
 
-O problema que este pipeline resolve: os dados que explicam a alfabetização
-estão espalhados em fontes heterogêneas (metas nacionais, estaduais e
-municipais, dados territoriais, microdados de alunos, indicadores de
-desempenho). Sem integração, não há como comparar resultado com meta, medir
-desigualdade regional ou alimentar modelos preditivos. Este projeto constrói a
-fundação de dados que torna essas análises possíveis, usando como fonte
-principal o Indicador Criança Alfabetizada publicado na plataforma
-[Base dos Dados](https://basedosdados.org).
+Na fonte agregada, a `taxa_alfabetizacao` já representa o indicador percentual publicado pela fonte oficial. Por isso, o corte de 743 é aplicado aos **microdados de alunos** e não usado para reinterpretar a taxa agregada.
+
+O problema tratado pelo projeto é a fragmentação dos dados que explicam o cenário de alfabetização: indicadores por UF e município, metas, dimensões territoriais e microdados de alunos possuem granularidades diferentes. O pipeline cria uma fundação única e governada para comparar resultado com meta, analisar desigualdades territoriais, acompanhar qualidade do dado e servir análises e modelos exploratórios.
+
+## Fontes oficiais utilizadas
+
+O pipeline atual não depende de dados sintéticos para construir seus indicadores analíticos.
+
+| Entidade | Origem | Grão | Uso |
+|---|---|---|---|
+| Indicador de alfabetização por UF | INEP, com série agregada utilizada no projeto | Ano + UF + série + rede | Histórico e visão estadual |
+| Indicador de alfabetização por município | INEP oficial | Ano + município + rede | Indicador e ranking municipal |
+| Metas Brasil | INEP oficial | Ano | Referência nacional |
+| Metas UF | INEP oficial | Ano + UF | Comparação resultado x meta |
+| Metas município | INEP oficial | Ano + município | Priorização municipal |
+| Microdados `TS_ALUNO.csv` | Avaliação da Alfabetização 2024 — INEP | Aluno | Regra dos 743 pontos e agregações |
+| Estados e municípios | IBGE | UF / município | Enriquecimento territorial |
+
+As planilhas oficiais são preparadas pelo `scripts/gerar_fontes.py`, que preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json` com informações de rastreabilidade e hash.
+
+Os antigos dados sintéticos foram retirados do fluxo oficial e mantidos apenas em `data/legacy_fontes_derivadas/` para rastreabilidade histórica.
+
+## Evidência de volume da execução atual
+
+A versão corrigida do projeto trabalha com volume real de microdados e não mais com uma massa pequena criada para demonstração.
+
+| Componente | Registros |
+|---|---:|
+| Microdados oficiais de alunos | **2.120.560** |
+| Indicador oficial por município | **10.584** |
+| Dimensão de municípios IBGE | **5.571** |
+| Metas municipais oficiais | **37.344** |
+| Indicador agregado por UF | **145** |
+| Metas por UF | **180** |
+| Metas Brasil | **7** |
+| Silver canônica | **10.737** |
+| Gold `indicador_municipio` | **10.584** |
+| Gold `resumo_uf` | **145** |
+| Gold `meta_vs_resultado` | **10.729** |
+| Gold `evolucao_temporal` | **10.729** |
+| Gold `base_modelagem_aluno` | **2.120.560** |
+
+> Os números acima representam uma execução validada do pipeline. Reexecuções futuras podem alterar contagens quando novas fontes oficiais forem incorporadas.
 
 ## O que este projeto entrega
 
-O projeto foi estruturado para demonstrar mais do que uma carga de dados. Ele cobre o ciclo completo de um produto de dados:
+O projeto cobre o ciclo completo de um produto de dados:
 
-- ingestão histórica em batch e simulação de eventos em streaming;
-- armazenamento em arquitetura Medalhão com Delta Lake;
-- contrato canônico para integrar fontes com formatos diferentes;
-- quarentena para registros inválidos, sem interromper toda a carga;
-- controles de idempotência, rastreabilidade e qualidade;
-- marts analíticos por município, UF, rede e período;
-- serving em MongoDB com estratégia de `upsert`;
+- ingestão batch de fontes oficiais;
+- replay controlado de registros oficiais em JSON para demonstrar o caminho de streaming;
+- Structured Streaming com `AvailableNow`, checkpoint e deduplicação por `event_id`;
+- contrato de dados e validação de schema;
+- quarentena para payloads inválidos;
+- arquitetura Medalhão com Delta Lake;
+- modelo canônico Silver integrando diferentes granularidades;
+- Quality Gate bloqueante antes da Gold;
+- cinco marts Gold, incluindo a base oficial no grão de aluno para preparação da Fase 3;
+- serving em MongoDB por `upsert`;
 - experimentos e métricas registrados no MLflow;
 - observabilidade técnica e de dados;
+- Command Center executivo construído a partir da Gold;
 - orquestração por Databricks Workflows;
 - práticas de Git, documentação, segurança e FinOps.
 
-## Arquitetura-alvo
+## Arquitetura atual
+
+A imagem em `docs/architecture.png` representa a visão executiva do pipeline. A arquitetura lógica canônica da versão atual é:
 
 ```mermaid
 flowchart LR
-    subgraph S[Fontes]
-        B[INEP / Base dos Dados\nCSV e tabelas públicas]
-        E[Eventos simulados\nJSON landing]
-        X[Enriquecimento\nIBGE / Censo Escolar]
+    subgraph S[1. Fontes oficiais]
+        UF[INEP\nIndicador por UF]
+        MUN[INEP\nIndicador por município]
+        META[INEP\nMetas oficiais]
+        ALUNO[INEP\nMicrodados TS_ALUNO]
+        IBGE[IBGE\nUF e município]
+        EVT[Replay oficial\nEventos JSON]
     end
 
-    subgraph I[Ingestão]
-        IB[Batch PySpark]
-        IS[Structured Streaming\nAvailableNow]
-        C[Validação de contrato\nmetadados + schema]
-        Q[(Quarentena / DLQ)]
+    subgraph I[2. Ingestão e contrato]
+        BATCH[Batch PySpark]
+        STREAM[Structured Streaming\nAvailableNow]
+        CONTRACT[Validação de contrato\nschema + regras]
+        Q1[(Quarentena)]
     end
 
-    subgraph L[Lakehouse Delta]
-        BR[(Bronze\nbruto + histórico)]
-        SI[(Silver\nmodelo canônico)]
+    subgraph L[3. Lakehouse Delta]
+        BR[(Bronze\nbruto + metadados)]
+        SI[(Silver\nterritorial + aluno)]
         DQ{Quality Gate}
-        GO[(Gold\nmarts analíticos)]
+        GO[(Gold\n4 marts territoriais + base aluno)]
+        Q2[(Quarentena)]
     end
 
-    subgraph O[Consumo]
-        MO[(MongoDB)]
-        ML[MLflow]
-        BI[Dashboard / SQL]
-        API[API ou aplicação]
+    subgraph O[4. Consumo]
+        MO[(MongoDB Atlas\nserving por upsert)]
+        BI[Command Center / SQL]
+        ML[MLflow\nmodelos + métricas]
+        API[API / Aplicação]
     end
 
-    subgraph T[Camadas transversais]
-        WF[Databricks Workflows]
-        OB[Auditoria e observabilidade]
-        GOV[Contrato, catálogo e lineage]
-        FIN[FinOps e performance]
-        CICD[Git com PR review]
-    end
+    UF --> BATCH
+    MUN --> BATCH
+    META --> BATCH
+    ALUNO --> BATCH
+    IBGE --> BATCH
+    EVT --> STREAM
 
-    B --> IB --> C
-    X --> IB
-    E --> IS --> C
-    C -->|válido| BR
-    C -->|inválido| Q
+    BATCH --> CONTRACT
+    STREAM --> CONTRACT
+
+    CONTRACT -->|válido| BR
+    CONTRACT -->|inválido| Q1
+
     BR --> SI --> DQ
     DQ -->|aprovado| GO
-    DQ -->|reprovado| Q
+    DQ -->|falha| Q2
+
     GO --> MO
-    GO --> ML
     GO --> BI
+    GO --> ML
     MO --> API
-    WF -. orquestra .-> IB
-    WF -. orquestra .-> IS
-    WF -. orquestra .-> SI
-    WF -. orquestra .-> GO
-    OB -. mede .-> BR
-    OB -. mede .-> SI
-    OB -. mede .-> GO
-    GOV -. governa .-> L
-    FIN -. otimiza .-> L
-    CICD -. valida .-> WF
 ```
 
-### Decisões principais
+### Camadas transversais
+
+- **Databricks Workflows:** orquestração do DAG e propagação do `run_id`;
+- **Observabilidade:** métricas, latência, rejeição, frescor e alertas;
+- **Governança:** contrato, Unity Catalog, comentários de tabela e rastreabilidade;
+- **Git + Git Flow:** branches, PR review e controle de versão;
+- **FinOps:** uso sob demanda, `AvailableNow` e ausência de otimização prematura.
+
+> GitHub Actions não é tratado como componente implementado na versão atual. CI permanece como evolução de roadmap.
+
+## Decisões arquiteturais
 
 | Decisão | Motivo |
 |---|---|
-| Batch e streaming convergem na Silver | Evita duas verdades de negócio e permite consumo uniforme. |
-| Bronze preserva payload e metadados | Facilita auditoria, reprocessamento e investigação de falhas. |
-| Quarentena separada | Um registro ruim não precisa derrubar todo o pipeline. |
-| Quality Gate antes da Gold | Impede que indicadores inconsistentes cheguem ao consumo. |
-| Chaves e `record_id` determinísticos | Reduz duplicidade e torna reexecuções idempotentes. |
-| MongoDB com `upsert` | Evita apagar toda a coleção a cada execução. |
-| Métricas operacionais em tabela Delta | Permite acompanhar volume, duração, frescor e falhas ao longo do tempo. |
+| Batch e streaming convergem na Silver | Evita duas verdades de negócio e mantém um modelo canônico. |
+| Streaming usa replay controlado de dado oficial | Permite demonstrar contrato, checkpoint, atraso, deduplicação e quarentena sem inventar o indicador de negócio. |
+| Bronze preserva dados e metadados técnicos | Facilita auditoria, reconciliação e reprocessamento. |
+| Metas são oficiais | Resultado não é comparado com alvo inventado ou interpolado. |
+| Microdados de alunos são oficiais | A regra dos 743 pontos é demonstrada sobre registros reais da fonte utilizada. |
+| Base de modelagem passa pelo Quality Gate | O grão de aluno é preservado em Silver, validado e só então publicado na Gold. |
+| Quality Gate antecede a Gold | Uma task de qualidade reprovada impede a execução da Gold no Workflow. |
+| `record_id` e `event_id` são determinísticos | Reduz duplicidade e melhora idempotência. |
+| Delta Lake é a verdade analítica | Silver e Gold permanecem como fonte governada do produto de dados. |
+| MongoDB é somente serving | Desacopla aplicações do Lakehouse sem substituir a fonte analítica de verdade. |
+| MongoDB usa `upsert` | Evita apagar e recriar toda a coleção em cada execução. |
+| Métricas operacionais são persistidas em Delta | Permite acompanhar saúde e comportamento do pipeline ao longo do tempo. |
 
 ## Tecnologias utilizadas e justificativa
 
-| Ferramenta | Papel | Por que foi escolhida |
+| Ferramenta | Papel | Justificativa |
 |---|---|---|
-| Databricks Free Edition (serverless, AWS) | Plataforma de processamento e catálogo | Cumpre o requisito de cloud sem custo; serverless elimina gestão de cluster e cobra por uso (FinOps). |
-| PySpark | Motor de transformação batch e streaming | Mesmo código escala do volume acadêmico aos microdados completos; Structured Streaming dá semântica exactly-once. |
-| Delta Lake | Formato de armazenamento das 3 camadas | ACID, MERGE (idempotência), time travel (histórico da Bronze) e schema enforcement em cima de Parquet. |
-| Unity Catalog | Governança | Catálogo, permissões e Volumes para landing de arquivos. |
-| Databricks Workflows | Orquestração | DAG nativo com dependências, propagação de `run_id` e notificação de falha, sem infra extra. |
-| MongoDB Atlas (M0) | Serving NoSQL | Camada de consumo para aplicações com upsert por chave; free tier atende a demo. |
-| MLflow | Experimentos de ML | Nativo no Databricks; registra parâmetros, métricas e artefatos de forma reproduzível. |
-| GitHub | Versionamento e colaboração | PRs e branches conforme o fluxo descrito na seção Workflow e Git. |
-
-## Decisões arquiteturais (trade-offs)
-
-**Batch vs streaming** — o histórico anual do INEP não justifica streaming; já as
-atualizações de medições precisam de semântica de evento (idempotência, atraso,
-quarentena). Adotamos o híbrido com convergência na Silver: uma única verdade de
-negócio. O custo é manter dois caminhos de ingestão, mitigado pelo contrato comum
-e pelo trigger `AvailableNow`, que dá exactly-once sem cluster 24/7.
-
-**Data lake vs data warehouse** — o lakehouse (Delta) evita duplicar armazenamento:
-os mesmos arquivos servem exploração, SQL e ML. Um warehouse dedicado daria melhor
-concorrência de BI, mas custaria mais e engessaria o acesso do MLflow aos dados.
-No volume deste projeto, Delta + SQL serverless cobre os dois papéis.
-
-**Custo vs performance** — escolhas deliberadas para o volume real (145 a ~39 mil
-linhas): sem particionamento, sem `OPTIMIZE`/`ZORDER` prematuros, `toPandas`
-restrito a coleções minúsculas. As decisões estão documentadas para reavaliação
-quando o volume crescer.
+| Databricks Free Edition | Plataforma principal | Ambiente serverless para processamento, catálogo, SQL, Workflows e MLflow sem manter cluster ocioso na execução acadêmica. |
+| PySpark | Transformação | Mesmo motor atende batch, agregações e Structured Streaming. |
+| Delta Lake | Lakehouse | ACID, schema enforcement, `MERGE`, histórico e integração nativa com Spark. |
+| Unity Catalog | Governança | Catálogo, schemas, tabelas e Volumes centralizados. |
+| Structured Streaming | Caminho de eventos | Checkpoint, `AvailableNow`, `foreachBatch` e integração com Delta. |
+| Databricks Workflows | Orquestração | DAG explícito, dependências e propagação do `run_id`. |
+| MongoDB Atlas | Serving NoSQL | Camada opcional de consumo para aplicações, com `upsert` por chave de negócio. |
+| MLflow | Experimentação | Registro de parâmetros, métricas, artefatos e model card. |
+| GitHub | Versionamento | Git Flow, branches, PRs e revisão cruzada. |
 
 ## Fluxo de execução
 
-| Ordem | Etapa | Entrada | Saída | Responsabilidade |
-|---:|---|---|---|---|
-| 00 | Setup | Configuração | schemas, volumes e tabela de auditoria | Plataforma |
-| 01 | Bronze batch | CSV / fontes públicas | tabelas Bronze + metadados | Ingestão |
-| 02 | Bronze streaming | eventos JSON | eventos Bronze + checkpoint | Streaming |
-| 03 | Silver | Bronze batch + streaming + dimensões + metas + alunos | modelo canônico integrado | Analytics |
-| 06 | Quality Gate | Silver | validações, métricas e quarentena | Analytics + Streaming |
-| 04 | Gold | Silver aprovada | marts por município, meta e evolução | Analytics |
-| 05 | Serving | Gold | documentos no MongoDB | Analytics |
-| 07 | MLflow | Gold enriquecida | modelo, parâmetros e métricas | Analytics / IA |
-| 08 | Monitoramento | logs e tabelas Delta | painel operacional e evidências | Plataforma + Streaming |
-| 09 | Dashboard (sob demanda) | Gold | visão executiva e análise de desigualdade | Analytics |
+| Ordem | Etapa | Entrada | Saída |
+|---:|---|---|---|
+| 00 | Setup | Configuração | schemas, volumes e observabilidade |
+| 01 | Bronze batch | fontes oficiais | tabelas Bronze + metadados |
+| 02 | Bronze streaming | replay oficial em JSON | `bronze.eventos_streaming` + checkpoint + quarentena |
+| 03 | Silver | Bronze batch + streaming + dimensões + metas + microdados | modelo canônico territorial + `silver.alunos_modelagem` |
+| 06 | Quality Gate | Silver | `medicoes_aprovadas` + `alunos_modelagem_aprovados` + métricas + quarentena |
+| 04 | Gold | Silver aprovada | cinco marts, incluindo `gold.base_modelagem_aluno` |
+| 05 | Serving | Gold municipal | MongoDB por `upsert` |
+| 07 | MLflow | Gold municipal | baseline, Random Forest, métricas e model card |
+| 08 | Monitoramento | métricas e tabelas Delta | saúde operacional |
+| 09 | Dashboard | Gold + Observability | Command Center executivo |
 
-> A qualidade é executada antes da Gold. Essa ordem evita publicar indicadores incorretos e corrige uma fragilidade comum em pipelines acadêmicos.
+A ordem **03 → 06 → 04** é proposital: a Gold só é executada pelo Workflow quando a task do Quality Gate termina com sucesso.
 
 ## Camadas de dados
 
 ### Bronze
 
-A Bronze preserva os dados recebidos e acrescenta somente metadados técnicos:
+A Bronze preserva a fonte recebida e adiciona somente metadados técnicos necessários para auditoria.
 
-- `_ingestion_timestamp`;
-- `_source_file` ou `_event_id`;
-- `_source_system`;
-- `_pipeline_run_id`;
-- `_schema_version`.
+No batch, os campos técnicos incluem, conforme a fonte:
 
-Não são aplicadas regras de negócio nessa camada. A reexecução usa `overwrite`
-para não duplicar a fonte; o histórico de versões fica preservado pelo Delta
-(time travel / `DESCRIBE HISTORY`).
+- `ingestion_timestamp`;
+- `source_file`;
+- `source_system`;
+- `pipeline_run_id`;
+- `schema_version`.
+
+No streaming, os eventos mantêm os campos do contrato e recebem metadados técnicos do processamento.
+
+A Bronze não calcula metas e não cria dados de negócio sintéticos.
 
 ### Silver
 
-A Silver representa o modelo canônico do projeto — é nela que ocorre a
-**integração das seis fontes do edital** (notebook `03_silver.py`):
+A Silver representa o modelo canônico do projeto.
 
-- tipagem explícita e normalização de `sigla_uf`, `id_municipio` e `rede`;
-- união entre medições batch (INEP, grão UF) e streaming (grão município);
-- **join com `bronze.municipio` e `bronze.uf`** (nome, região, capital e flag
-  `uf_consistente` — a UF do registro deve bater com a do município);
-- **join com as metas** (`meta_brasil`, `meta_uf`, `meta_municipio`): cada
-  medição sai com a meta do seu grão em `meta_taxa`;
-- **join com o agregado de alunos** por ano+UF+rede (proficiência média e % de
-  alunos acima do corte 743);
-- coluna `fonte_dados` (`oficial_inep` | `simulado`) para o consumidor
-  distinguir dado real de evento do simulador;
-- criação de `alfabetizado`, conforme regra documentada no `CONTRACT.md`;
-- deduplicação por chave de negócio (`record_id` determinístico).
+Principais responsabilidades:
+
+- normalização de `sigla_uf`, `id_municipio` e `rede`;
+- normalização de percentuais para fração entre `0` e `1`;
+- integração do indicador oficial por UF;
+- integração do indicador oficial por município;
+- integração do replay de streaming;
+- enriquecimento territorial com UF, município e região;
+- associação da meta correspondente ao **mesmo grão territorial**;
+- ausência de fallback de meta municipal para meta de UF;
+- agregação dos microdados oficiais de alunos por ano + UF + rede para enriquecer a visão territorial;
+- preservação paralela do grão individual em `silver.alunos_modelagem`, com **2.120.560 alunos oficiais**;
+- aplicação do corte de 743 sobre a proficiência individual somente para QA e agregações controladas;
+- criação de `record_id` determinístico;
+- identificação de origem em `fonte_dados`.
+
+### Quality Gate
+
+O Quality Gate avalia regras por registro e verificações sistêmicas.
+
+Entre os controles:
+
+- campos críticos obrigatórios;
+- `id_municipio` com sete dígitos quando o grão é municipal;
+- UF pertencente ao domínio brasileiro;
+- rede pertencente ao domínio aceito;
+- taxa dentro do intervalo esperado;
+- integridade referencial;
+- unicidade de `record_id`;
+- Silver não vazia;
+- cobertura mínima definida pelo projeto;
+- Quality Gate específico da base de alunos, com validação de target, chaves territoriais, `record_id` e origem oficial.
+
+Registros inválidos são enviados para:
+
+```text
+workspace.observability.quarantine_records
+```
+
+Falha sistêmica reprova a task. Como a Gold depende da task `quality`, uma execução reprovada não libera nova publicação Gold pelo Workflow.
+
+Execuções validadas:
+
+```text
+Silver territorial aprovada: 10.737 registros | cobertura 100%
+Silver de alunos aprovada:   2.120.560 registros | 0 rejeitados | cobertura 100%
+```
 
 ### Gold
 
-A Gold contém tabelas prontas para consumo:
+A Gold é construída exclusivamente a partir da Silver aprovada.
 
 | Tabela | Grão | Uso |
 |---|---|---|
-| `gold.indicador_municipio` | ano + município + rede | análise territorial e ranking |
-| `gold.meta_vs_resultado` | ano + território (UF e município) + rede | comparação da taxa observada com a meta |
-| `gold.evolucao_temporal` | ano + território + rede | evolução histórica e tendência |
-| `gold.resumo_uf` | ano + UF + rede | visão executiva e dashboard (dado oficial INEP) |
+| `gold.indicador_municipio` | ano + município + rede | indicador e ranking territorial |
+| `gold.resumo_uf` | ano + UF + rede | visão executiva por UF |
+| `gold.meta_vs_resultado` | ano + território + rede | resultado observado x meta oficial |
+| `gold.evolucao_temporal` | ano + território + rede | evolução e tendência |
+| `gold.base_modelagem_aluno` | aluno | base oficial para classificação supervisionada na Fase 3 |
 
-Todos os marts carregam `fonte_dados`, que separa o dado oficial do INEP dos
-eventos do simulador. **Importante:** a fonte batch oficial tem grão UF; o grão
-municipal é alimentado pelo streaming simulado e, quando o CSV municipal
-oficial da Base dos Dados for carregado (ver notebook `01`, seção 3), também
-por dado real — sem mudança de código.
+Os marts que combinam UF e município carregam o campo de nível territorial, evitando interpretar os dois grãos como se fossem equivalentes.
 
-## Contrato do evento de streaming
+A `gold.base_modelagem_aluno` foi validada com **2.120.560 registros**, todos de fonte oficial INEP. Ela consome exclusivamente `silver.alunos_modelagem_aprovados`.
 
-Exemplo de payload:
+O target preparado é `alfabetizado_oficial`. `proficiencia_portugues` e a flag derivada do corte de 743 não são publicadas como features nessa Gold de modelagem, evitando **data leakage**.
+
+## Regra dos 743 pontos
+
+O corte de 743 é aplicado no **grão de aluno**:
+
+```text
+alfabetizado = proficiencia >= 743
+```
+
+O pipeline utiliza os microdados oficiais `TS_ALUNO.csv` para demonstrar a regra.
+
+Na fonte agregada, a `taxa_alfabetizacao` já representa o indicador percentual publicado. Portanto:
+
+- não se aplica o corte de 743 sobre a taxa agregada;
+- a regra por aluno é usada para produzir agregações auxiliares;
+- o indicador oficial continua sendo preservado como medida principal.
+
+## Contrato do streaming
+
+O caminho de streaming utiliza **replay controlado de registros oficiais** em JSON para demonstrar propriedades técnicas do pipeline.
+
+Exemplo estrutural:
 
 ```json
 {
-  "event_id": "6cfbf7e6-9940-4c52-aeb9-1fb670e4fd5c",
-  "event_time": "2026-06-30T15:00:00Z",
+  "event_id": "uuid-deterministico",
+  "event_time": "2026-08-31T20:00:00Z",
   "schema_version": "1.0",
-  "ano": 2025,
-  "sigla_uf": "SP",
-  "id_municipio": "3550308",
+  "ano": 2024,
+  "sigla_uf": "AL",
+  "id_municipio": "2700102",
   "rede": 3,
-  "taxa_alfabetizacao": 0.8125,
-  "source": "simulador_medicoes"
+  "taxa_alfabetizacao": 0.70,
+  "source": "INEP_OFICIAL_REPLAY"
 }
 ```
 
-Campos obrigatórios e regras de domínio estão definidos em [`CONTRACT.md`](CONTRACT.md).
+A demonstração inclui propositalmente um payload inválido para comprovar a operação da quarentena. Esse evento de teste não representa indicador analítico.
 
-## Qualidade de dados
+Controles implementados:
 
-As verificações mínimas são:
-
-- unicidade de `record_id`;
-- `id_municipio` com sete dígitos;
-- `sigla_uf` com duas letras e pertencente ao domínio brasileiro;
-- `rede` dentro dos valores aceitos;
-- taxas entre `0` e `1` ou percentuais entre `0` e `100`, conforme a fonte;
-- integridade referencial com as dimensões (`id_municipio` deve existir em
-  `bronze.municipio`, `sigla_uf` em `bronze.uf`) e consistência entre tabelas
-  (UF do registro × UF do município) — implementadas no notebook `06`;
-- completude dos campos críticos;
-- detecção de queda ou aumento anormal de volume;
-- frescor da última carga;
-- ausência de regressão na quantidade de municípios cobertos.
-
-Registros reprovados são gravados em `workspace.observability.quarantine_records`, acompanhados do motivo da rejeição.
+- schema explícito;
+- checkpoint isolado da landing zone;
+- deduplicação por `event_id`;
+- `MERGE` idempotente no destino;
+- `AvailableNow`;
+- quarentena para violações de contrato.
 
 ## Observabilidade
 
-O Workflow injeta `{{job.run_id}}` como parâmetro em todas as tasks
-(`workflows/job_pipeline.json`), então uma execução é correlacionável ponta a
-ponta em `observability.pipeline_metrics`. Métricas registradas:
+A execução utiliza um `run_id` comum para permitir rastreabilidade ponta a ponta em:
 
-| Métrica | Exemplo de uso |
-|---|---|
-| `run_id` e status | rastrear uma execução ponta a ponta |
-| linhas lidas, aprovadas e rejeitadas | avaliar perda de dados |
-| duração | identificar gargalos |
-| horário do dado mais recente | medir frescor |
-| duplicatas encontradas | detectar falhas de idempotência |
-| atraso do streaming | comparar `event_time` e ingestão |
-| versão do schema | controlar evolução do contrato |
+```text
+workspace.observability.pipeline_metrics
+```
 
-Alertas configurados e recomendados:
+Principais indicadores acompanhados:
 
-- falha de task (notificação por e-mail no Workflow);
-- Silver sem dados após carga Bronze;
-- rejeição acima de 5%;
-- queda de volume superior a 30% contra a média recente;
-- atraso de evento acima do SLA definido;
-- ausência de atualização na Gold.
+- status por task;
+- linhas lidas, escritas e rejeitadas;
+- duração;
+- frescor da Gold;
+- latência do streaming;
+- distribuição de origem;
+- taxa de rejeição;
+- registros de quarentena.
+
+O monitoramento possui thresholds para rejeição, atraso e frescor e gera uma visão consolidada de saúde operacional.
+
+## Serving com MongoDB
+
+O MongoDB não substitui a Gold.
+
+A arquitetura adota:
+
+```text
+Delta Lake / Gold = fonte analítica de verdade
+MongoDB           = camada de serving
+```
+
+A publicação é feita a partir de `gold.indicador_municipio`.
+
+Chave de `upsert`:
+
+```text
+ano + id_municipio + rede
+```
+
+A connection string fica em secret do Databricks e não é versionada.
+
+O notebook de serving é tolerante à ausência do secret na Free Edition: nesse caso, a etapa é registrada como não executada sem expor credenciais.
 
 ## Aplicação em IA
 
-A camada Gold foi desenhada para servir três frentes de inteligência artificial
-e análise, alinhadas ao uso em políticas públicas:
+O notebook `07_ml_mlflow.py` utiliza `gold.indicador_municipio` para uma prova de conceito de regressão.
 
-1. **Predição de alfabetização** — regressão sobre `gold.meta_vs_resultado` e
-   `gold.evolucao_temporal` para estimar a taxa futura por território e
-   antecipar quais municípios/UFs não atingirão a meta de 2030, permitindo
-   intervenção antes da avaliação oficial. O notebook `07_ml_mlflow.py`
-   implementa baseline + Random Forest com registro no MLflow.
-2. **Análise de desigualdade educacional** — as dimensões integradas (região,
-   UF, rede de ensino, capital/interior) permitem decompor o indicador e
-   medir gaps entre redes pública e privada, entre regiões e entre capitais e
-   interior — insumo direto para priorizar repasses e formação docente.
-3. **Políticas públicas baseadas em evidência** — `gap_meta` e `atingiu_meta`
-   por território transformam a meta do Compromisso Nacional em um painel de
-   acompanhamento: onde o gap cresce, a política não está chegando. Com o
-   enriquecimento socioeconômico opcional (IBGE/Censo Escolar), viabiliza
-   clusters de vulnerabilidade educacional.
+Estrutura atual:
 
-Cada experimento registra: versão dos dados, features, parâmetros, métricas,
-artefatos e limitações (model card no notebook `07`).
+- baseline com `DummyRegressor`;
+- modelo `RandomForestRegressor`;
+- features estruturais como ano, UF e rede;
+- `media_portugues` e métricas derivadas do próprio alvo são excluídas para evitar vazamento;
+- parâmetros, métricas e artefatos são registrados no MLflow;
+- model card registra limitações e riscos.
 
-## O que cada integrante pode entregar além do mínimo
+O modelo é **exploratório**. Mesmo com cobertura municipal oficial, o conjunto atual possui poucas variáveis explicativas e não deve ser utilizado para decisão educacional real sem enriquecimento socioeconômico, validação temporal, análise de viés e explicabilidade.
 
-| Frente | Entrega principal | Diferenciais que aumentam a qualidade do projeto |
-|---|---|---|
-| **P1 — Plataforma e DevOps** | workspace, volumes, Workflow e Git | secrets, auditoria, runbook, branch protection e release tag |
-| **P2 — Fontes e Bronze** | ingestão das fontes e dicionário | profiling automático, metadados de origem, controle de versão, reconciliação de contagem e enriquecimento IBGE |
-| **P3 — Streaming e Observabilidade** | producer, consumer e métricas | `event_id`, deduplicação, checkpoint isolado, atraso, quarentena, replay e alertas por SLA |
-| **P4 — Analytics, Serving e IA** | Silver, Gold, MongoDB e MLflow | modelo canônico, testes de regra, `upsert`, dashboard, baseline, explicabilidade e model card |
-| **Todos** | integração e apresentação | revisão cruzada, teste ponta a ponta, roteiro de demo, decisões registradas e retrospectiva técnica |
+### Preparação para a Fase 3
 
-A divisão detalhada está em [`TASKS.md`](TASKS.md) e o modo de trabalho do time em [`docs/team_playbook.md`](docs/team_playbook.md).
+A POC de regressão do notebook `07` continua sendo uma entrega exploratória da Fase 2. Para a Fase 3, a fundação no grão correto já está disponível:
+
+```text
+workspace.bronze.alunos
+        ↓
+workspace.silver.alunos_modelagem
+        ↓
+workspace.silver.alunos_modelagem_aprovados
+        ↓
+workspace.gold.base_modelagem_aluno
+```
+
+A Gold de modelagem possui **2.120.560 alunos oficiais**, com `alfabetizado_oficial` como target binário preparado para a futura classificação.
+
+A proficiência não foi publicada como feature nessa base porque está diretamente relacionada ao critério de 743 pontos e poderia produzir vazamento de informação. Enriquecimentos socioeconômicos e educacionais adicionais entram como evolução da Fase 3, mantendo proveniência e grão compatíveis.
+
+## Command Center executivo
+
+O notebook `09_dashboard.py` transforma a camada Gold em uma visão executiva com
+9 abas, nesta ordem:
+
+1. Visão geral;
+2. Ranking territorial;
+3. Matriz de prioridade;
+4. Municípios prioritários;
+5. Desigualdade regional e por rede;
+6. Jornada até 2030 (trajetória e metas);
+7. Proficiência dos alunos (microdados e corte de 743 pontos);
+8. Qualidade e proveniência (inventário de fontes, marts da Gold e saúde operacional do pipeline);
+9. Painel de decisão.
+
+O dashboard consome a Gold e as métricas de observabilidade, sem reconstruir a regra de negócio fora do Lakehouse.
+
+## Workflow
+
+O Workflow possui DAG explícito:
+
+```text
+setup
+  ├── bronze_batch
+  └── bronze_streaming
+          ↓
+        silver
+          ↓
+       quality
+          ↓
+         gold
+       ↙      ↘
+  serving     mlflow
+       ↘      ↙
+      monitoring
+```
+
+Configuração de agenda:
+
+```text
+06:00
+America/Sao_Paulo
+PAUSED
+```
+
+O estado `PAUSED` é **deliberado** durante a execução acadêmica para evitar consumo desnecessário na Free Edition. A agenda permanece documentada e pode ser ativada em um ambiente de execução contínua.
+
+## Status da entrega
+
+> Status atualizado em 2026-09-01: a entrega principal do pipeline foi concluída e validada. Os itens pendentes abaixo representam continuidade operacional, release final e evolução de roadmap, e não invalidam a solução entregue.
+
+## Workflow e Git
+
+Fluxo adotado:
+
+```text
+feature/<tema>
+      ↓
+pull request
+      ↓
+develop
+      ↓
+validação integrada
+      ↓
+main
+      ↓
+tag de entrega
+```
+
+Regras mínimas:
+
+- nenhuma alteração direta em `main`;
+- PR com descrição e evidência de teste;
+- revisão cruzada;
+- mudança de schema exige atualização do contrato e dicionário;
+- credenciais nunca são versionadas;
+- o pipeline deve ser validado antes da release.
+
+GitHub Actions não faz parte da implementação concluída desta fase.
+
+## FinOps e performance
+
+A decisão de performance foi revista usando o volume real de **2.120.560 registros de alunos**, e não uma amostra sintética pequena.
+
+Práticas adotadas:
+
+- compute serverless e execução sob demanda;
+- Workflow agendado, porém pausado no ambiente acadêmico;
+- Structured Streaming com `AvailableNow`, evitando infraestrutura 24x7;
+- tabelas pequenas não são particionadas;
+- ausência de `OPTIMIZE` e `ZORDER` prematuros;
+- evitar `toPandas()` em grandes coleções;
+- `toPandas()` limitado ao dataset municipal usado na POC de ML;
+- schemas explícitos;
+- métricas de duração e volume persistidas para permitir estimativa de custo.
+
+### Custo acadêmico
+
+No ambiente utilizado para a entrega:
+
+```text
+Databricks Free Edition
+MongoDB Atlas Free Tier, quando configurado
+GitHub
+```
+
+**Custo direto observado do projeto acadêmico: R$ 0.**
+
+### Estimativa ilustrativa de cenário produtivo
+
+Os valores abaixo são uma **estimativa de planejamento**, não uma cotação comercial nem custo medido do projeto:
+
+| Item | Hipótese | Estimativa/mês |
+|---|---|---:|
+| Jobs serverless | carga diária curta | ~US$ 55 |
+| Streaming `AvailableNow` | execuções periódicas | ~US$ 28 |
+| Armazenamento de objetos | dezenas de GB com histórico | ~US$ 2 |
+| MongoDB gerenciado | camada pequena de serving | ~US$ 57 |
+| **Total ilustrativo** | | **~US$ 142/mês** |
+
+A decisão arquitetural deve ser reavaliada com métricas reais de execução, frequência, retenção e crescimento dos microdados antes de qualquer implantação produtiva.
 
 ## Estrutura do repositório
 
 ```text
 .
 ├── data/
-│   ├── external/             # dimensões IBGE (estados, municípios)
-│   ├── raw/                  # fontes de entrada (ver data/raw/README.md)
-│   └── sample/               # amostras sem dados sensíveis
+│   ├── external/                 # dimensões territoriais IBGE
+│   ├── source/                   # planilhas oficiais utilizadas na preparação
+│   ├── raw/                      # fontes preparadas para ingestão
+│   ├── legacy_fontes_derivadas/ # legado sintético fora do pipeline oficial
+│   └── sample/
 ├── docs/
-│   ├── architecture.png/svg
+│   ├── architecture.png
+│   ├── architecture.svg
 │   ├── data_dictionary.md
-│   ├── evidencias/            # 32 prints da execução no Databricks
 │   ├── flow_review.md
 │   ├── fontes_e_entidades.md
 │   ├── runbook.md
 │   ├── team_playbook.md
-│   └── video_roteiro.md       # roteiro do vídeo executivo (5 min)
+│   └── video_roteiro.md
 ├── notebooks/
 │   ├── 00_setup_ambiente.py
 │   ├── 01_bronze_batch.py
@@ -347,13 +561,21 @@ A divisão detalhada está em [`TASKS.md`](TASKS.md) e o modo de trabalho do tim
 │   ├── 07_ml_mlflow.py
 │   ├── 08_monitoring.py
 │   └── 09_dashboard.py
-├── scripts/                  # geração das fontes derivadas (metas, alunos)
-├── src/                      # schemas, regras e utilitários compartilhados
-├── tests/                    # testes executáveis fora do notebook
-├── workflows/                # definição do Databricks Workflow
-├── CONTRACT.md               # contrato técnico e regras de negócio
-├── CONTRIBUTING.md           # fluxo de Git do time
-├── TASKS.md                  # backlog e responsáveis
+├── scripts/
+│   └── gerar_fontes.py
+├── src/
+│   ├── schemas.py
+│   └── utils.py
+├── tests/
+│   ├── test_utils.py
+│   ├── test_silver_contract.py
+│   └── test_quality_gate.py
+├── workflows/
+│   ├── 00_pipeline_runner.py
+│   └── job_pipeline.json
+├── CONTRACT.md
+├── CONTRIBUTING.md
+├── TASKS.md
 └── requirements.txt
 ```
 
@@ -361,132 +583,93 @@ A divisão detalhada está em [`TASKS.md`](TASKS.md) e o modo de trabalho do tim
 
 ### Pré-requisitos
 
-- conta no Databricks Free Edition;
+- Databricks Free Edition;
 - acesso ao catálogo `workspace`;
-- arquivos de entrada disponíveis em um Volume do Unity Catalog;
-- MongoDB Atlas apenas para a etapa de serving;
-- segredo `mongo_uri` configurado no Databricks para uso real.
+- fontes oficiais preparadas em `data/raw/`;
+- arquivos disponíveis no Volume `/Volumes/workspace/bronze/raw_files/`;
+- MongoDB Atlas somente se a etapa de serving for demonstrada;
+- secret `alfabetizacao/mongo_uri` somente para publicação real no MongoDB.
 
-### Passos
+### Ordem
 
-1. Faça um fork ou clone do repositório.
-2. Importe o projeto pelo Databricks Repos.
-3. Execute `00_setup_ambiente.py`.
-4. Envie os arquivos para `/Volumes/workspace/bronze/raw_files/`.
-5. Rode o Workflow ou execute os notebooks na ordem indicada na seção “Fluxo de execução”.
-6. Consulte `workspace.observability.pipeline_metrics` para validar o resultado.
-7. Execute o roteiro de demonstração descrito em [`docs/runbook.md`](docs/runbook.md).
+1. Prepare as fontes oficiais com `scripts/gerar_fontes.py`.
+2. Execute `00_setup_ambiente.py`.
+3. Disponibilize os arquivos no Volume Bronze.
+4. Execute `01_bronze_batch.py`.
+5. Execute `02_bronze_streaming.py`.
+6. Execute `03_silver.py`.
+7. Execute `06_quality_checks.py`.
+8. Somente após aprovação, execute `04_gold.py`.
+9. Execute `05_serving_mongodb.py` se houver secret configurado.
+10. Execute `07_ml_mlflow.py`.
+11. Execute `08_monitoring.py`.
+12. Execute `09_dashboard.py`.
 
-## Workflow e Git
+A mesma ordem está representada no Databricks Workflow.
 
-Fluxo adotado:
+## Testes
 
-```text
-feature/<tema> → pull request → develop → validação integrada → main → tag de entrega
+A suíte de testes cobre:
+
+- regra de alfabetização dos 743 pontos;
+- ausência de fallback sintético;
+- contrato e schema das fontes oficiais;
+- consistência do modelo Silver;
+- unicidade e determinismo de `record_id`;
+- associação de metas no mesmo grão territorial;
+- regras do Quality Gate territorial e do Quality Gate da base de alunos.
+
+Execução:
+
+```python
+import pytest
+
+resultado = pytest.main(["-q", "tests"])
+assert resultado == 0
 ```
-
-Regras mínimas:
-
-- nenhuma alteração direta em `main`;
-- PR com descrição, evidência de teste e impacto no contrato;
-- ao menos uma revisão de outro integrante;
-- mudança de schema exige atualização do `CONTRACT.md` e do dicionário;
-- credenciais nunca são versionadas;
-- o pipeline completo deve ser testado antes da tag de entrega.
-
-> O histórico de commits, branches e PRs está no repositório GitHub do grupo —
-> o link deve acompanhar a entrega (o zip não carrega a pasta `.git`).
-
-## FinOps e performance
-
-Para o volume acadêmico, otimização excessiva pode custar mais do que economiza. As decisões consideram tamanho real e padrão de consulta.
-
-Práticas adotadas:
-
-- compute serverless com cobrança por uso (sem cluster ocioso);
-- nenhuma tabela pequena particionada (evita small files — ver notebook `01`);
-- `OPTIMIZE` e `ZORDER` somente quando o histórico justificar;
-- `VACUUM` respeitando a política de retenção;
-- evitar `toPandas()` para coleções grandes;
-- registrar duração e volume por execução para estimar custo;
-- schemas explícitos em todas as fontes (evita re-inferência e erros de tipo).
-
-**Custo real do projeto: R$ 0** — Databricks Free Edition (serverless na AWS),
-MongoDB Atlas M0 e GitHub gratuitos.
-
-**Estimativa de cenário produtivo** (microdados completos, ~10 GB/ano, cargas
-diárias — valores de referência, não cotação):
-
-| Item | Dimensionamento | Estimativa/mês |
-|---|---|---:|
-| Jobs serverless (batch diário ~15 min) | ~8 DBU | ~US$ 55 |
-| Streaming `AvailableNow` horário | ~4 DBU | ~US$ 28 |
-| Armazenamento S3 (~50 GB com histórico) | — | ~US$ 2 |
-| MongoDB Atlas M10 | — | ~US$ 57 |
-| **Total** | | **~US$ 142/mês** |
-
-A mesma arquitetura em cluster dedicado 24/7 custaria >US$ 600/mês — serverless +
-gatilhos agendados reduzem ~75% do custo operacional.
-
-> Valores de custo devem ser apresentados como estimativa de cenário e nunca como preço garantido.
 
 ## Demonstração sugerida
 
-Uma apresentação forte pode seguir este roteiro:
+Para uma apresentação executiva curta:
 
-1. executar uma carga batch;
-2. publicar dois eventos de streaming, incluindo um duplicado;
-3. publicar um evento inválido e mostrar a quarentena;
-4. executar a Silver e o Quality Gate;
-5. consultar o indicador por município na Gold;
-6. mostrar a atualização no MongoDB por `upsert`;
-7. abrir a execução no MLflow;
-8. mostrar as métricas e o `run_id` no monitoramento.
+1. mostrar a arquitetura;
+2. apresentar as fontes oficiais e o volume real;
+3. mostrar Bronze batch e replay de streaming;
+4. mostrar um payload inválido chegando à quarentena;
+5. apresentar a Silver canônica;
+6. executar o Quality Gate;
+7. mostrar os cinco marts Gold, destacando `base_modelagem_aluno`;
+8. abrir o Command Center;
+9. mostrar rapidamente MLflow e observabilidade.
 
-Esse roteiro demonstra ingestão, resiliência, qualidade, consumo e governança em poucos minutos.
-
-## Evidências de execução
-
-A execução completa no Databricks Free Edition está documentada em **32 prints**
-em [`docs/evidencias/`](docs/evidencias/README.md):
-
-| Prints | Etapa |
-|---|---|
-| 01–03 | Setup do ambiente e upload dos dados |
-| 04–31 | Execução do pipeline notebook a notebook (Bronze → Silver → Quality Gate → Gold → Serving → MLflow → Monitoramento) |
-| 32 | Workflow ponta a ponta (grafo do job verde) |
-
-## Vídeo executivo
-
-Apresentação de até 5 minutos em linguagem executiva (problema de negócio,
-arquitetura, valor para análises educacionais e uso em IA), conforme roteiro em
-[`docs/video_roteiro.md`](docs/video_roteiro.md).
-
-> **Link do vídeo:** _adicionar aqui antes da entrega final._
+A demonstração deve caber em **até 5 minutos**, priorizando arquitetura, confiabilidade, dados oficiais e valor analítico.
 
 ## Limitações conhecidas
 
-- o streaming é uma simulação por arquivos e `AvailableNow`, não um Kafka ativo;
-- o grão municipal é alimentado por eventos simulados até que o CSV municipal
-  oficial da Base dos Dados seja carregado (notebook `01`, seção 3); a coluna
-  `fonte_dados` torna essa distinção explícita em todas as camadas;
-- as tabelas de metas foram derivadas por interpolação linear (2023→2030,
-  ver `scripts/gerar_fontes.py` e a coluna `metodologia`), pois as metas
-  municipais oficiais não estão publicadas em tabela única na Base dos Dados;
-- a qualidade das análises depende da cobertura das fontes e do correto de-para de `rede`;
-- a regra de corte deve permanecer documentada e validada com a fonte oficial usada no trabalho;
-- o modelo de IA é exploratório e não deve ser interpretado como ferramenta de decisão sobre estudantes;
-- o Databricks Free Edition possui limitações de infraestrutura e integração.
+- o streaming é um **replay por arquivos JSON com `AvailableNow`**, não Kafka ou Event Hubs em execução contínua;
+- o evento inválido existe apenas para demonstração controlada da quarentena;
+- o dataset municipal e as metas são oficiais, mas a cobertura temporal depende da publicação disponível na fonte;
+- o de-para da rede deve permanecer rastreável à documentação da fonte;
+- o MongoDB é opcional e não participa da verdade analítica;
+- a POC de ML da Fase 2 possui poucas features e não deve orientar decisões educacionais reais;
+- a Gold de aluno está preparada para a Fase 3, mas ainda precisa de enriquecimentos e pipeline de classificação antes de uso preditivo;
+- o enriquecimento socioeconômico permanece como evolução futura;
+- o Databricks Free Edition possui limitações de infraestrutura e integração;
+- CI automatizada ainda não faz parte da entrega concluída.
 
-## Roadmap
+## Roadmap de continuidade
 
-- [ ] carregar o indicador municipal oficial da Base dos Dados (notebook 01, seção 3);
-- [ ] implementar replay de eventos da quarentena;
-- [ ] adicionar testes de integração com amostras locais;
-- [ ] adicionar CI (GitHub Actions) para validar Python, JSON e Markdown;
-- [ ] enriquecer com dados socioeconômicos (IBGE / Censo Escolar);
-- [ ] publicar uma release reproduzível com evidências da execução;
-- [ ] avaliar uma API de consulta sobre a camada de serving.
+A entrega principal do projeto já está concluída e validada. O roadmap abaixo representa evoluções de produto, governança e operação após a entrega final:
+
+- [ ] implementar replay operacional da quarentena;
+- [ ] adicionar CI para validação de Python, JSON e Markdown;
+- [ ] enriquecer com dados socioeconômicos;
+- [ ] ampliar testes de não regressão dos indicadores;
+- [ ] avaliar API de consulta sobre a camada de serving;
+- [ ] reavaliar particionamento e otimizações quando volume e frequência justificarem;
+- [ ] publicar release final com evidências reproduzíveis;
+- [ ] gravar vídeo executivo e incorporar link no README;
+- [ ] incluir link do repositório GitHub com histórico de commits, branches e PRs.
 
 ## Documentação complementar
 
@@ -496,5 +679,6 @@ arquitetura, valor para análises educacionais e uso em IA), conforme roteiro em
 - [Playbook do time](docs/team_playbook.md)
 - [Runbook de execução e demonstração](docs/runbook.md)
 - [Dicionário de dados](docs/data_dictionary.md)
+- [Fontes e entidades](docs/fontes_e_entidades.md)
 - [Roteiro do vídeo executivo](docs/video_roteiro.md)
 - [Índice das evidências](docs/evidencias/README.md)

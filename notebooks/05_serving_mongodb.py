@@ -1,4 +1,11 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# dependencies = [
+#   "pymongo",
+# ]
+# ///
 # MAGIC %md
 # MAGIC # 05 — Serving MongoDB
 # MAGIC Publica a Gold no MongoDB Atlas com **upsert** por município (um documento
@@ -10,20 +17,50 @@
 # MAGIC databricks secrets put-secret alfabetizacao mongo_uri
 # MAGIC ```
 # MAGIC A connection string **nunca** vai versionada (contrato, seção 2).
+# MAGIC
+# MAGIC **Justificativa do serving:**
+# MAGIC
+# MAGIC Delta Lake permanece como a fonte analítica de verdade do pipeline.
+# MAGIC
+# MAGIC  O MongoDB não substitui a camada Gold e não é utilizado para processamento analítico.
+# MAGIC
+# MAGIC  Sua função é atuar como camada de serving para consumo por aplicações e APIs, disponibilizando o indicador municipal em um modelo orientado a documentos.
+# MAGIC
+# MAGIC O documento mantém o mesmo grão do mart gold.indicador_municipio:
+# MAGIC
+# MAGIC - ano + id_municipio + rede
+# MAGIC
+# MAGIC -  A publicação utiliza upsert nessa chave, permitindo reexecuções idempotentes
+# MAGIC -  sem apagar a coleção inteira.
+# MAGIC
+# MAGIC **Essa separação mantém:**
+# MAGIC
+# MAGIC - Delta Lake para processamento, histórico e análises;
+# MAGIC
+# MAGIC - MongoDB para serving operacional orientado a consultas por município.
+# MAGIC  
+# MAGIC -  Neste projeto o MongoDB representa uma camada de serving demonstrativa.
+# MAGIC
+# MAGIC -  Não é afirmado ganho de desempenho sem benchmark específico.
+# MAGIC baixa latência por aplicação/API, com documento no mesmo grão do mart municipal e upsert idempotente por `ano + id_municipio + rede`.
 
 # COMMAND ----------
+
 # MAGIC %pip install pymongo
 
 # COMMAND ----------
+
 dbutils.library.restartPython()
 
 # COMMAND ----------
+
 CATALOG = "workspace"
 SOURCE = f"{CATALOG}.gold.indicador_municipio"
 DATABASE = "alfabetizacao"
 COLLECTION = "indicador_municipio"
 
 # COMMAND ----------
+
 # Lê o segredo. Se não estiver configurado, o notebook não falha o Workflow:
 # apenas avisa e encerra (permite rodar o pipeline sem Atlas no Free Edition).
 MONGO_URI = None
@@ -34,11 +71,13 @@ except Exception as exc:
     print("Configure o secret (P1) para habilitar a publicação no MongoDB.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Escrita distribuída com bulk upsert
 # MAGIC Cada partição do Spark abre sua própria conexão e envia as operações em lote.
 
 # COMMAND ----------
+
 def make_writer(mongo_uri, database, collection):
     """Fábrica de função de partição — captura a URI por closure (serializável)."""
     def write_partition(rows):
@@ -63,6 +102,7 @@ def make_writer(mongo_uri, database, collection):
     return write_partition
 
 # COMMAND ----------
+
 if MONGO_URI:
     df = spark.table(SOURCE)
     total = df.count()

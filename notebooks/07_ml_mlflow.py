@@ -1,16 +1,38 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# dependencies = [
+#   "scikit-learn",
+#   "mlflow",
+# ]
+# ///
 # MAGIC %md
-# MAGIC # 07 — Aplicação em IA (P4) — MLflow
-# MAGIC Modelo de regressão que prevê a **taxa de alfabetização** de um município a
-# MAGIC partir de atributos estruturais (ano, UF, rede). Compara um **baseline**
-# MAGIC (média) com um modelo real e registra tudo no MLflow.
 # MAGIC
-# MAGIC > Observação honesta: `media_portugues` e `pct_registros_alfabetizados` são
-# MAGIC > derivados da mesma medição do alvo, então **não** são usados como features
-# MAGIC > (seria vazamento). Ver limitações no model card no fim do notebook.
+# MAGIC # 07 — Aplicação em IA (P4) — MLflow
+# MAGIC
+# MAGIC  Modelo de regressão que prevê a **taxa de alfabetização** de um município a  partir de atributos estruturais (ano, UF, rede). Compara um **baseline**  (média) com um modelo real e registra tudo no MLflow.
+# MAGIC
+# MAGIC **Observação honesta:** 
+# MAGIC `media_portugues` e `pct_registros_alfabetizados` são derivados da mesma medição do alvo, então **não** são usados como features (seria vazamento). Ver limitações no model card no fim do notebook.
+
+# COMMAND ----------
+
+# DBTITLE 1,Cell 2
+# Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# dependencies = [
+#   "scikit-learn",
+#   "mlflow",
+# ]
+# ///
 
 # COMMAND ----------
 CATALOG = "workspace"
+
+import logging
 
 import mlflow
 import mlflow.sklearn
@@ -24,9 +46,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 1. Montagem do dataset (Gold → pandas)
+# O cluster bloqueia a chamada extraContext usada pelo MLflow para
+# resolver tags automáticas de contexto (Py4JSecurityException). É
+# inofensivo, mas polui a saída — silenciado no nível ERROR.
+logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
 
 # COMMAND ----------
 pdf = (
@@ -52,10 +75,6 @@ else:
     X_train, X_test, y_train, y_test = X, X, y, y
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 2. Funções auxiliares
-
-# COMMAND ----------
 def avaliar(model, X_te, y_te):
     pred = model.predict(X_te)
     return {
@@ -72,10 +91,6 @@ preprocess = ColumnTransformer(
 mlflow.set_experiment(f"/Shared/alfabetizacao_taxa_municipio")
 
 # COMMAND ----------
-# MAGIC %md
-# MAGIC ## 3. Baseline — DummyRegressor (prevê a média)
-
-# COMMAND ----------
 with mlflow.start_run(run_name="baseline_media") as run_base:
     baseline = Pipeline([("prep", preprocess), ("model", DummyRegressor(strategy="mean"))])
     baseline.fit(X_train, y_train)
@@ -84,12 +99,17 @@ with mlflow.start_run(run_name="baseline_media") as run_base:
     mlflow.log_param("modelo", "DummyRegressor(mean)")
     mlflow.log_param("n_treino", len(X_train))
     mlflow.log_metrics(metrics_base)
-    mlflow.sklearn.log_model(baseline, "model")
-    print("Baseline:", metrics_base)
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 4. Modelo — RandomForestRegressor
+    input_example = X_train.head(5).copy()
+    input_example["ano"] = input_example["ano"].astype("float64")
+    input_example["rede"] = input_example["rede"].astype("float64")
+    mlflow.sklearn.log_model(
+        baseline,
+        "model",
+        input_example=input_example,
+        skops_trusted_types=["sklearn.compose._column_transformer._RemainderColsList"],
+    )
+    print("Baseline:", metrics_base)
 
 # COMMAND ----------
 with mlflow.start_run(run_name="random_forest") as run_rf:
@@ -105,12 +125,17 @@ with mlflow.start_run(run_name="random_forest") as run_rf:
     mlflow.log_param("max_depth", 8)
     mlflow.log_param("n_treino", len(X_train))
     mlflow.log_metrics(metrics_rf)
-    mlflow.sklearn.log_model(rf, "model")
-    print("RandomForest:", metrics_rf)
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 5. Comparação baseline x modelo
+    input_example_rf = X_train.head(5).copy()
+    input_example_rf["ano"] = input_example_rf["ano"].astype("float64")
+    input_example_rf["rede"] = input_example_rf["rede"].astype("float64")
+    mlflow.sklearn.log_model(
+        rf,
+        "model",
+        input_example=input_example_rf,
+        skops_trusted_types=["sklearn.compose._column_transformer._RemainderColsList"],
+    )
+    print("RandomForest:", metrics_rf)
 
 # COMMAND ----------
 comparacao = pd.DataFrame([
@@ -121,10 +146,6 @@ print(comparacao.to_string(index=False))
 
 melhor = "random_forest" if metrics_rf["mae"] <= metrics_base["mae"] else "baseline_media"
 print(f"\nMelhor modelo por MAE: {melhor}")
-
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 6. Model card (limitações e riscos) — logado como artefato
 
 # COMMAND ----------
 model_card = f"""# Model Card — Previsão da taxa de alfabetização por município
@@ -169,3 +190,12 @@ with mlflow.start_run(run_name="model_card"):
     mlflow.log_param("melhor_modelo", melhor)
 
 print(model_card)
+# resolver tags automáticas de contexto (Py4JSecurityException). É
+# inofensivo, mas polui a saída — silenciado no nível ERROR.
+logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
+
+# COMMAND ----------
+
+# DBTITLE 1,Retorno para pipeline runner
+# Retorna sucesso para o pipeline runner
+dbutils.notebook.exit(melhor)
