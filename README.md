@@ -456,10 +456,6 @@ PAUSED
 
 O estado `PAUSED` é **deliberado** durante a execução acadêmica para evitar consumo desnecessário na Free Edition. A agenda permanece documentada e pode ser ativada em um ambiente de execução contínua.
 
-## Status da entrega
-
-> Status atualizado em 2026-09-01: a entrega principal do pipeline foi concluída e validada. Os itens pendentes abaixo representam continuidade operacional, release final e evolução de roadmap, e não invalidam a solução entregue.
-
 ## Workflow e Git
 
 Fluxo adotado:
@@ -590,6 +586,15 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 - MongoDB Atlas somente se a etapa de serving for demonstrada;
 - secret `alfabetizacao/mongo_uri` somente para publicação real no MongoDB.
 
+> **Atenção — cada pessoa no próprio workspace**: clonar este repositório (via
+> Git folder) traz os notebooks e o código, mas **não** popula o Volume
+> automaticamente. Volumes são armazenamento local de cada workspace Free
+> Edition e não são sincronizados pelo Git. Se você está rodando numa conta
+> separada da conta onde os dados já foram gerados, é obrigatório rodar o
+> passo 1 abaixo (`gerar_fontes.py`) e subir os arquivos no **seu próprio**
+> Volume antes de executar `01_bronze_batch.py` — senão ele falha por falta
+> de arquivo, não por erro de código.
+
 ### Ordem
 
 1. Prepare as fontes oficiais com `scripts/gerar_fontes.py`.
@@ -657,9 +662,7 @@ A demonstração deve caber em **até 5 minutos**, priorizando arquitetura, conf
 - o Databricks Free Edition possui limitações de infraestrutura e integração;
 - CI automatizada ainda não faz parte da entrega concluída.
 
-## Roadmap de continuidade
-
-A entrega principal do projeto já está concluída e validada. O roadmap abaixo representa evoluções de produto, governança e operação após a entrega final:
+## Roadmap
 
 - [ ] implementar replay operacional da quarentena;
 - [ ] adicionar CI para validação de Python, JSON e Markdown;
@@ -667,9 +670,7 @@ A entrega principal do projeto já está concluída e validada. O roadmap abaixo
 - [ ] ampliar testes de não regressão dos indicadores;
 - [ ] avaliar API de consulta sobre a camada de serving;
 - [ ] reavaliar particionamento e otimizações quando volume e frequência justificarem;
-- [ ] publicar release final com evidências reproduzíveis;
-- [ ] gravar vídeo executivo e incorporar link no README;
-- [ ] incluir link do repositório GitHub com histórico de commits, branches e PRs.
+- [ ] publicar release final com evidências reproduzíveis.
 
 ## Documentação complementar
 
