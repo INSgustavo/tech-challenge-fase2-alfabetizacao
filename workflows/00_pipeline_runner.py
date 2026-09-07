@@ -5,6 +5,7 @@ Por que o 06 vem antes do 04: o Gold (04) lê de silver.medicoes_aprovadas e sil
 
 O 09 (dashboard) depende do 08 (monitoring), não direto do Gold, porque ele também lê observability.pipeline_metrics/quarantine_records sem o 08 já ter rodado, a aba de saúde do pipeline sobe vazia.
 
+    
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 NOTEBOOKS_DIR = " colocar o caminho do seu NOTEBOOKS_DIR = "/Workspace "
