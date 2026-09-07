@@ -10,7 +10,7 @@
   },
   "email_notifications": {
     "on_failure": [
-      "gustavopietro93@gmail.com"
+      "seu e-mail"
     ],
     "no_alert_for_skipped_runs": true
   },
