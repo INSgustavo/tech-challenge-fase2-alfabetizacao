@@ -748,6 +748,12 @@ VOLUME_BRONZE = Path("/Volumes/workspace/bronze/raw_files")
 def copiar_raw_para_bronze():
     VOLUME_BRONZE.mkdir(parents=True, exist_ok=True)
 
+    # O TS_ALUNO.csv não é gerado por este script (é o microdado oficial do
+    # INEP, grande demais pra derivar aqui) — mas a pasta onde ele precisa
+    # ser enviado manualmente já fica pronta, pra ninguém errar o caminho.
+    PASTA_MICRODADOS = VOLUME_BRONZE / "microdados_inep" / "DADOS"
+    PASTA_MICRODADOS.mkdir(parents=True, exist_ok=True)
+
     arquivos = [
         "br_inep_avaliacao_alfabetizacao_uf.csv.gz",
         "br_inep_avaliacao_alfabetizacao_municipio.csv.gz",
@@ -776,6 +782,20 @@ def copiar_raw_para_bronze():
     print(
         f"\n✓ Arquivos oficiais disponíveis em: {VOLUME_BRONZE}"
     )
+
+    caminho_ts_aluno = PASTA_MICRODADOS / "TS_ALUNO.csv"
+    if caminho_ts_aluno.exists():
+        print(f"✓ TS_ALUNO.csv já está presente em: {caminho_ts_aluno}")
+    else:
+        print(
+            "\n⚠ AÇÃO MANUAL NECESSÁRIA: TS_ALUNO.csv não encontrado.\n"
+            f"  A pasta já foi criada em: {PASTA_MICRODADOS}\n"
+            "  Baixe o microdado oficial do INEP (Avaliação da "
+            "Alfabetização) e suba o arquivo TS_ALUNO.csv nessa pasta "
+            "pela interface do Databricks (Catalog → workspace → bronze "
+            "→ Volumes → raw_files → microdados_inep → DADOS → "
+            "Upload to this volume) antes de rodar 01_bronze_batch.py."
+        )
 
 
 if __name__ == "__main__":
