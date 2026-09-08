@@ -20,7 +20,9 @@ Antes de criar o Job, confirme:
 
 O arquivo `TS_ALUNO.csv` precisa estar no Volume antes de iniciar o Job. Ele nao e gerado pelo pipeline.
 
-## Criar o Workflow
+## Criar o Workflow (opcional)
+
+O arquivo `workflows/job_pipeline.json` e a unica configuracao de orquestracao do projeto. Ele pode ser importado no Databricks para executar o fluxo automaticamente.
 
 1. Acesse **Workflows** no Databricks.
 2. Crie um novo Job usando o arquivo `workflows/job_pipeline.json`.
@@ -35,7 +37,24 @@ Branch: main
 5. Configure um e-mail valido para notificacoes de falha, substituindo o valor de exemplo do JSON.
 6. Mantenha a agenda pausada para evitar execucoes automaticas na Free Edition.
 
-## Executar o pipeline
+## Executar manualmente
+
+Para executar os notebooks individualmente, abra cada arquivo na pasta `notebooks/` e use **Run all** na ordem abaixo:
+
+```text
+00_setup_ambiente
+01_bronze_batch e 02_bronze_streaming
+03_silver
+06_quality_checks
+04_gold
+05_serving_mongodb e 07_ml_mlflow
+08_monitoring
+09_dashboard
+```
+
+As etapas `01` e `02` podem ser executadas depois do `00`; a etapa `03` só deve começar quando as duas terminarem. A `04` depende da aprovação da `06`. O notebook `09_dashboard` deve ser aberto e executado diretamente para visualizar o HTML.
+
+## Executar pelo Workflow
 
 Use **Run now** para iniciar uma execucao manual. O Workflow executa as tasks na seguinte ordem:
 
