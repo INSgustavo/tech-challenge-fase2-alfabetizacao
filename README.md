@@ -536,9 +536,11 @@ GitHub Actions não faz parte da implementação concluída desta fase.
 A decisão de performance usa os volumes das fontes versionadas e as contagens
 produzidas pelo notebook `08_monitoring.py`. Neste checkout, as fontes locais
 possuem **37.344 metas municipais**, **5.571 municípios** e **10.584 registros do
-indicador municipal**. O volume de alunos não é versionado: `TS_ALUNO.csv` é
-carregado manualmente no Volume do Databricks, portanto sua contagem deve ser
-considerada somente quando o run registrar `bronze.alunos`.
+indicador municipal**. O `00_setup_ambiente.py` cria automaticamente o Volume
+`workspace.bronze.raw_files` e a pasta de destino dos microdados. O arquivo
+oficial `TS_ALUNO.csv` não é gerado pelo setup: seu conteúdo precisa ser
+carregado nessa pasta, e sua contagem deve ser considerada quando o run
+registrar `bronze.alunos`.
 
 Práticas adotadas:
 
