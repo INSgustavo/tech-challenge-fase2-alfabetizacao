@@ -557,12 +557,29 @@ Nem toda tabela da Gold tem o mesmo volume, então a decisão de particionar foi
 avaliada tabela a tabela, não por uma regra genérica de "tabela pequena não
 particiona":
 
-| Tabela | Linhas | Particionada? | Motivo |
-|---|---:|---|---|
-| `gold.resumo_uf` | Conforme o run | Não | Volume pequeno; a contagem real é emitida pelo `08_monitoring.py`. |
-| `gold.indicador_municipio` | Conforme o run | Não | O mart é pequeno no padrão atual; a contagem real vem do run do Databricks. |
-| `bronze.alunos` | Conforme o run | Não, por decisão consciente | O padrão de consulta atual é sempre carga completa (a Silver lê a tabela inteira a cada execução do pipeline, sem filtro por `ano`/`sigla_uf`). Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
-| `gold.base_modelagem_aluno` | Conforme o run | Não, por decisão consciente | Mesmo motivo, é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
+**`gold.resumo_uf`**
+
+- Linhas: conforme o run, conferido pelo `08_monitoring.py`.
+- Particionada: não. O volume é pequeno no padrão atual.
+
+**`gold.indicador_municipio`**
+
+- Linhas: conforme o run. A fonte local atual possui `10.584` registros.
+- Particionada: não. O mart é pequeno no padrão atual.
+
+**`bronze.alunos`**
+
+- Linhas: conforme o `TS_ALUNO.csv` carregado no Volume.
+- Particionada: não, por decisão consciente. A Silver lê a tabela inteira a
+      cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem um padrão
+      de leitura seletiva real não reduz custo e adiciona overhead de metadados no
+      Delta.
+
+**`gold.base_modelagem_aluno`**
+
+- Linhas: conforme o run, derivadas de `silver.alunos_modelagem_aprovados`.
+- Particionada: não, pelo mesmo motivo de `bronze.alunos`. O notebook de ML
+      consome a tabela inteira, sem filtro incremental.
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
