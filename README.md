@@ -559,17 +559,17 @@ particiona":
 
 **`gold.resumo_uf`**
 
-- Linhas: conforme o run, conferido pelo `08_monitoring.py`.
+- Linhas: **145** na última execução validada.
 - Particionada: não. O volume é pequeno no padrão atual.
 
 **`gold.indicador_municipio`**
 
-- Linhas: conforme o run. A fonte local atual possui `10.584` registros.
+- Linhas: **10.584** na última execução validada.
 - Particionada: não. O mart é pequeno no padrão atual.
 
 **`bronze.alunos`**
 
-- Linhas: conforme o `TS_ALUNO.csv` carregado no Volume.
+- Linhas: **2.120.560** na última execução validada.
 - Particionada: não, por decisão consciente. A Silver lê a tabela inteira a
       cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem um padrão
       de leitura seletiva real não reduz custo e adiciona overhead de metadados no
@@ -577,7 +577,8 @@ particiona":
 
 **`gold.base_modelagem_aluno`**
 
-- Linhas: conforme o run, derivadas de `silver.alunos_modelagem_aprovados`.
+- Linhas: **2.120.560** na última execução validada, derivadas de
+      `silver.alunos_modelagem_aprovados`.
 - Particionada: não, pelo mesmo motivo de `bronze.alunos`. O notebook de ML
       consome a tabela inteira, sem filtro incremental.
 
@@ -587,6 +588,10 @@ uma API filtrando por UF), particionar por `ano` ou `sigla_uf` passa a
 compensar. Hoje, para carga completa, o particionamento é dispensável, não
 por o volume ser pequeno, mas porque o padrão de acesso não seleciona um
 subconjunto dos dados.
+
+> As contagens acima representam a última execução validada. Uma nova execução
+> pode alterá-las quando novas fontes oficiais ou novos microdados forem
+> incorporados.
 
 ### Custo acadêmico
 
