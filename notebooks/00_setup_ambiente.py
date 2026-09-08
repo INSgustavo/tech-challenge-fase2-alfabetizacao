@@ -1,18 +1,9 @@
-# Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
-# MAGIC %md
-# MAGIC # 00 — Setup do ambiente
-# MAGIC Cria schemas, Volumes e a estrutura de observabilidade, e em seguida
-# MAGIC já prepara e publica as fontes oficiais (lógica de `gerar_fontes.py`
-# MAGIC embutida ao final deste notebook, sem depender de arquivo externo).
 
-# COMMAND ----------
-# MAGIC %md
-# MAGIC ## 1. Schemas
-# MAGIC Cria os 4 schemas do projeto no catálogo `workspace`, se ainda não existirem.
+# %md
+# 00 — Setup do ambiente
+# Cria schemas, Volumes e a estrutura de observabilidade, e em seguida
+# já prepara e publica as fontes oficiais (lógica de `gerar_fontes.py`
+# embutida ao final deste notebook, sem depender de arquivo externo).
 
 # COMMAND ----------
 CATALOG = "workspace"
