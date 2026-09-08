@@ -37,27 +37,52 @@ As planilhas oficiais são preparadas pela lógica que hoje está embutida em `0
 
 Os antigos dados sintéticos foram retirados do fluxo oficial e mantidos apenas em `data/legacy_fontes_derivadas/` para rastreabilidade histórica.
 
-## Evidência de volume da execução atual
+## Volumes reais das fontes e da execução
 
-A versão corrigida do projeto trabalha com volume real de microdados e não mais com uma massa pequena criada para demonstração.
+As fontes abaixo estão versionadas neste repositório. A contagem considera os
+registros dos arquivos em `data/raw` e `data/external`, sem a linha de cabeçalho:
 
-| Componente | Registros |
+| Fonte versionada | Registros |
 |---|---:|
-| Microdados oficiais de alunos | **2.120.560** |
 | Indicador oficial por município | **10.584** |
+| Indicador agregado por UF | **21** |
 | Dimensão de municípios IBGE | **5.571** |
+| Dimensão de UFs IBGE | **27** |
 | Metas municipais oficiais | **37.344** |
-| Indicador agregado por UF | **145** |
 | Metas por UF | **180** |
 | Metas Brasil | **7** |
-| Silver canônica | **10.737** |
-| Gold `indicador_municipio` | **10.584** |
-| Gold `resumo_uf` | **145** |
-| Gold `meta_vs_resultado` | **10.729** |
-| Gold `evolucao_temporal` | **10.729** |
-| Gold `base_modelagem_aluno` | **2.120.560** |
 
-> Os números acima representam uma execução validada do pipeline. Reexecuções futuras podem alterar contagens quando novas fontes oficiais forem incorporadas.
+As tabelas Silver e Gold são criadas durante a execução e não ficam
+armazenadas no Git. O arquivo oficial `TS_ALUNO.csv` também é carregado
+manualmente no Volume do Databricks; por isso, a quantidade de alunos e das
+tabelas derivadas deve ser lida no resultado do próprio run, nunca assumida
+como uma constante neste README.
+
+Para obter as contagens atuais no Databricks, execute:
+
+```python
+TABELAS = [
+      "bronze.alunos",
+      "silver.medicoes_alfabetizacao",
+      "silver.medicoes_aprovadas",
+      "silver.alunos_modelagem_aprovados",
+      "gold.indicador_municipio",
+      "gold.resumo_uf",
+      "gold.meta_vs_resultado",
+      "gold.evolucao_temporal",
+      "gold.base_modelagem_aluno",
+]
+
+for tabela in TABELAS:
+      nome = f"workspace.{tabela}"
+      if spark.catalog.tableExists(nome):
+            print(f"{nome}: {spark.table(nome).count():,} registros")
+      else:
+            print(f"{nome}: ainda não criada")
+```
+
+> Cada evidência deve registrar a data e o `run_id`, pois novas fontes podem
+> alterar as contagens.
 
 ## O que este projeto entrega
 
@@ -230,7 +255,8 @@ Principais responsabilidades:
 - associação da meta correspondente ao **mesmo grão territorial**;
 - ausência de fallback de meta municipal para meta de UF;
 - agregação dos microdados oficiais de alunos por ano + UF + rede para enriquecer a visão territorial;
-- preservação paralela do grão individual em `silver.alunos_modelagem`, com **2.120.560 alunos oficiais**;
+- preservação paralela do grão individual em `silver.alunos_modelagem`, com a
+      quantidade de alunos disponível no `TS_ALUNO.csv` oficial;
 - aplicação do corte de 743 sobre a proficiência individual somente para QA e agregações controladas;
 - criação de `record_id` determinístico;
 - identificação de origem em `fonte_dados`.
@@ -263,8 +289,8 @@ Falha sistêmica reprova a task. Como a Gold depende da task `quality`, uma exec
 Execuções validadas:
 
 ```text
-Silver territorial aprovada: 10.737 registros | cobertura 100%
-Silver de alunos aprovada:   2.120.560 registros | 0 rejeitados | cobertura 100%
+Silver territorial aprovada: contagem informada pelo Quality Gate | cobertura calculada no run
+Silver de alunos aprovada:   contagem informada pelo Quality Gate | rejeições calculadas no run
 ```
 
 ### Gold
@@ -281,7 +307,9 @@ A Gold é construída exclusivamente a partir da Silver aprovada.
 
 Os marts que combinam UF e município carregam o campo de nível territorial, evitando interpretar os dois grãos como se fossem equivalentes.
 
-A `gold.base_modelagem_aluno` foi validada com **2.120.560 registros**, todos de fonte oficial INEP. Ela consome exclusivamente `silver.alunos_modelagem_aprovados`.
+A `gold.base_modelagem_aluno` consome exclusivamente
+`silver.alunos_modelagem_aprovados`. Sua contagem deve ser lida no resultado
+do run do Databricks.
 
 O target preparado é `alfabetizado_oficial`. `proficiencia_portugues` e a flag derivada do corte de 743 não são publicadas como features nessa Gold de modelagem, evitando **data leakage**.
 
@@ -421,7 +449,9 @@ workspace.silver.alunos_modelagem_aprovados
 workspace.gold.base_modelagem_aluno
 ```
 
-A Gold de modelagem possui **2.120.560 alunos oficiais**, com `alfabetizado_oficial` como target binário preparado para a futura classificação.
+A Gold de modelagem possui a quantidade de alunos publicada pelo run do
+Databricks, com `alfabetizado_oficial` como target binário preparado para a
+futura classificação.
 
 A proficiência não foi publicada como feature nessa base porque está diretamente relacionada ao critério de 743 pontos e poderia produzir vazamento de informação. Enriquecimentos socioeconômicos e educacionais adicionais entram como evolução da Fase 3, mantendo proveniência e grão compatíveis.
 
