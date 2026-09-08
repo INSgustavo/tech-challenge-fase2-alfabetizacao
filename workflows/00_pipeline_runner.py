@@ -1,9 +1,13 @@
-Runner do pipeline completo chama cada notebook via dbutils.notebook.run, na ORDEM REAL de dependência (não a ordem numérica dos arquivos).
-Ordem: 00 -> {01, 02 em paralelo} -> 03 -> 06 -> 04 -> {05, 07 em paralelo} -> 08 -> 09
+%md
+# Runner do pipeline completo chama cada notebook via dbutils.notebook.run, na ORDEM REAL de dependência (não a ordem numérica dos arquivos).
 
-Por que o 06 vem antes do 04: o Gold (04) lê de silver.medicoes_aprovadas e silver.alunos_modelagem_aprovados, que só existem depois do Quality Gate (06) aprovar a Silver. Rodar na ordem numérica (04 antes do 06) quebra com tabela inexistente.
+ Ordem: 00 -> {01, 02 em paralelo} -> 03 -> 06 -> 04 -> {05, 07 em paralelo} -> 08 -> 09
 
-O 09 (dashboard) depende do 08 (monitoring), não direto do Gold, porque ele também lê observability.pipeline_metrics/quarantine_records sem o 08 já ter rodado, a aba de saúde do pipeline sobe vazia.
+ Por que o 06 vem antes do 04: o Gold (04) lê de silver.medicoes_aprovadas e silver.alunos_modelagem_aprovados, que só existem depois do Quality Gate (06) aprovar a Silver. Rodar na ordem numérica (04 antes do 06) quebra com tabela inexistente.
+
+ O 09 (dashboard) depende do 08 (monitoring), não direto do Gold, porque ele também lê observability.pipeline_metrics/quarantine_records sem o 08 já ter rodado, a aba de saúde do pipeline sobe vazia.
+
+
 
     
 from concurrent.futures import ThreadPoolExecutor, as_completed
