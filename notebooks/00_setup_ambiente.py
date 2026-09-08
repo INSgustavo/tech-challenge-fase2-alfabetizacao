@@ -8,6 +8,17 @@
 # MAGIC Cria schemas, Volumes e a estrutura de observabilidade, e em seguida
 # MAGIC já prepara e publica as fontes oficiais (lógica de `gerar_fontes.py`
 # MAGIC embutida ao final deste notebook, sem depender de arquivo externo).
+# MAGIC
+# MAGIC ## Execução manual
+# MAGIC Execute este notebook primeiro. Depois que ele terminar com sucesso,
+# MAGIC execute manualmente os notebooks na ordem abaixo:
+# MAGIC
+# MAGIC `01_bronze_batch` e `02_bronze_streaming` → `03_silver` →
+# MAGIC `06_quality_checks` → `04_gold` → `05_serving_mongodb` e
+# MAGIC `07_ml_mlflow` → `08_monitoring` → `09_dashboard`.
+# MAGIC
+# MAGIC O notebook `09_dashboard` deve ser aberto e executado diretamente para
+# MAGIC visualizar o HTML completo do dashboard.
 
 # COMMAND ----------
 
@@ -94,10 +105,8 @@ print(f"Ambiente validado com Spark {spark.version}")
 # MAGIC - confirma se o `TS_ALUNO.csv` (microdado oficial, upload manual) já
 # MAGIC   está no lugar certo.
 # MAGIC
-# MAGIC **Ajuste antes de rodar**: a variável `BASE` logo abaixo precisa apontar
-# MAGIC pra pasta do projeto no **seu** Workspace - não tem como detectar isso
-# MAGIC sozinho rodando como célula de notebook (veja o comentário junto da
-# MAGIC variável).
+# MAGIC A raiz do projeto é detectada automaticamente quando este notebook é
+# MAGIC executado pelo Databricks Repos.
 
 # COMMAND ----------
 
@@ -213,7 +222,7 @@ def resolver_base() -> Path:
     Localiza a raiz do repositório.
 
     Funciona:
-    - via python scripts/gerar_fontes.py (arquivo próprio, com __file__)
+    - via execução direta como script Python (com `__file__`)
     - em notebook Jupyter local (cwd = raiz do projeto)
 
     NÃO funciona quando este código roda como célula dentro de um notebook
