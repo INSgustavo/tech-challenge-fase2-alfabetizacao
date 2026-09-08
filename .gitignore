@@ -16,6 +16,8 @@ data/output/
 checkpoints/
 *.parquet
 *.delta
+data/source/microdados_inep/
+data/raw/microdados_inep/
 
 # Secrets and local configs
 .env.*

@@ -30,7 +30,7 @@ O pipeline atual não depende de dados sintéticos para construir seus indicador
 | Metas Brasil | INEP oficial | Ano | Referência nacional |
 | Metas UF | INEP oficial | Ano + UF | Comparação resultado x meta |
 | Metas município | INEP oficial | Ano + município | Priorização municipal |
-| Microdados `TS_ALUNO.csv` | Avaliação da Alfabetização 2024 - INEP | Aluno | Regra dos 743 pontos e agregações |
+| Microdados `TS_ALUNO.csv`, `TS_ESTADO.csv`, `TS_ITEM.csv` e `TS_MUNICIPIO.csv` | Avaliação da Alfabetização 2024 - INEP | Aluno, estado, item e município | Regra dos 743 pontos, dimensões e agregações |
 | Estados e municípios | IBGE | UF / município | Enriquecimento territorial |
 
 As planilhas oficiais são preparadas pela lógica que hoje está embutida em `00_setup_ambiente.py` (antes era um script separado, `scripts/gerar_fontes.py`), que preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json` com informações de rastreabilidade e hash.
@@ -538,9 +538,11 @@ produzidas pelo notebook `08_monitoring.py`. Neste checkout, as fontes locais
 possuem **37.344 metas municipais**, **5.571 municípios** e **10.584 registros do
 indicador municipal**. O `00_setup_ambiente.py` cria automaticamente o Volume
 `workspace.bronze.raw_files` e a pasta de destino dos microdados. O arquivo
-oficial `TS_ALUNO.csv` não é gerado pelo setup: seu conteúdo precisa ser
-carregado nessa pasta, e sua contagem deve ser considerada quando o run
-registrar `bronze.alunos`.
+O setup procura os arquivos oficiais `TS_ALUNO.csv`, `TS_ESTADO.csv`,
+`TS_ITEM.csv` e `TS_MUNICIPIO.csv` em `data/source/microdados_inep/DADOS/`
+e os publica no Volume. Se os arquivos já estiverem no Volume, eles são
+reconhecidos no próprio destino. O setup não fabrica conteúdo de microdados:
+os arquivos oficiais precisam estar na entrada ou no Volume antes do Bronze.
 
 Práticas adotadas:
 

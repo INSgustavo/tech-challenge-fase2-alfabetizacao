@@ -14,10 +14,12 @@ embutida nele agora). Não precisa rodar nada manualmente para esta pasta.
 | meta_brasil.csv / meta_uf.csv / meta_municipio.csv | INEP oficial | extraídas diretamente das planilhas oficiais, sem interpolação nem herança de meta |
 | fontes_oficiais_manifest.json | gerado pelo pipeline | rastreabilidade e hash das fontes oficiais |
 
-O único arquivo que não é gerado automaticamente é o microdado de aluno
-(`TS_ALUNO.csv`), que precisa ser baixado do INEP e enviado manualmente
-para `/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/` antes de
-rodar `01_bronze_batch.py`.
+O `00_setup_ambiente.py` cria a pasta de microdados e publica os arquivos
+`TS_ALUNO.csv`, `TS_ESTADO.csv`, `TS_ITEM.csv` e `TS_MUNICIPIO.csv`
+encontrados em `data/source/microdados_inep/DADOS/` no Volume
+`/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/`. Os arquivos
+oficiais devem ser colocados nessa pasta de entrada antes da execução. O
+setup não fabrica conteúdo de microdados nem substitui a fonte oficial.
 
 O `alunos_simulados.csv.gz` (dado sintético usado antes da correção da
 Fase 2) foi movido para `data/legacy_fontes_derivadas/` e não faz parte do

@@ -109,8 +109,9 @@ if EM_DATABRICKS:
 # MAGIC   (dimensões IBGE);
 # MAGIC - gera os CSVs em `data/raw/` sem interpolar meta nem simular aluno;
 # MAGIC - copia tudo para `/Volumes/workspace/bronze/raw_files/`;
-# MAGIC - confirma se o `TS_ALUNO.csv` (microdado oficial, upload manual) já
-# MAGIC   está no lugar certo.
+# MAGIC - procura `TS_ALUNO.csv`, `TS_ESTADO.csv`, `TS_ITEM.csv` e
+# MAGIC   `TS_MUNICIPIO.csv` na entrada de microdados e publica os arquivos no
+# MAGIC   Volume; se já estiverem no Volume, apenas valida a presença.
 # MAGIC
 # MAGIC A raiz do projeto é detectada automaticamente quando este notebook é
 # MAGIC executado pelo Databricks Repos.
@@ -916,20 +917,47 @@ def main():
 import shutil
 
 VOLUME_BRONZE = Path("/Volumes/workspace/bronze/raw_files")
+MICRODADOS_ESPERADOS = (
+    "TS_ALUNO.csv",
+    "TS_ESTADO.csv",
+    "TS_ITEM.csv",
+    "TS_MUNICIPIO.csv",
+)
+
+
+def localizar_microdados():
+    """Localiza microdados fornecidos fora do Git e disponíveis no projeto."""
+    candidatos = [
+        BASE / "data" / "source" / "microdados_inep" / "DADOS",
+        BASE / "data" / "raw" / "microdados_inep" / "DADOS",
+    ]
+
+    encontrados = {}
+    for pasta in candidatos:
+        if not pasta.exists():
+            continue
+        for nome in MICRODADOS_ESPERADOS:
+            arquivo = pasta / nome
+            if arquivo.exists() and nome not in encontrados:
+                encontrados[nome] = arquivo
+    return encontrados
 
 
 def copiar_raw_para_bronze():
-    if not EM_DATABRICKS:
-        print("Modo local: fontes permanecem em data/raw; Volume não utilizado.")
-        return
+    destino_bronze = (
+        VOLUME_BRONZE
+        if EM_DATABRICKS
+        else BASE / "data" / "raw"
+    )
+    destino_microdados = (
+        VOLUME_BRONZE / "microdados_inep" / "DADOS"
+        if EM_DATABRICKS
+        else BASE / "data" / "raw" / "microdados_inep" / "DADOS"
+    )
+    destino_microdados.mkdir(parents=True, exist_ok=True)
 
-    VOLUME_BRONZE.mkdir(parents=True, exist_ok=True)
-
-    # O TS_ALUNO.csv não é gerado por este script (é o microdado oficial do
-    # INEP, grande demais pra derivar aqui) - mas a pasta onde ele precisa
-    # ser enviado manualmente já fica pronta, pra ninguém errar o caminho.
-    PASTA_MICRODADOS = VOLUME_BRONZE / "microdados_inep" / "DADOS"
-    PASTA_MICRODADOS.mkdir(parents=True, exist_ok=True)
+    if EM_DATABRICKS:
+        VOLUME_BRONZE.mkdir(parents=True, exist_ok=True)
 
     arquivos = [
         "br_inep_avaliacao_alfabetizacao_uf.csv.gz",
@@ -946,33 +974,40 @@ def copiar_raw_para_bronze():
 
     for nome in arquivos:
         origem = RAW / nome
-        destino = VOLUME_BRONZE / nome
+        destino = destino_bronze / nome
 
         if not origem.exists():
             raise FileNotFoundError(
                 f"Arquivo obrigatório não encontrado: {origem}"
             )
 
-        shutil.copy2(origem, destino)
+        if origem.resolve() != destino.resolve():
+            shutil.copy2(origem, destino)
         print(f"[OK] {nome}")
 
-    print(
-        f"\n✓ Arquivos oficiais disponíveis em: {VOLUME_BRONZE}"
-    )
+    print(f"\n✓ Arquivos oficiais disponíveis em: {destino_bronze}")
 
-    caminho_ts_aluno = PASTA_MICRODADOS / "TS_ALUNO.csv"
-    if caminho_ts_aluno.exists():
-        print(f"✓ TS_ALUNO.csv já está presente em: {caminho_ts_aluno}")
-    else:
+    microdados = localizar_microdados()
+    if microdados:
+        print("\n=== PUBLICANDO MICRODADOS OFICIAIS ===")
+        for nome, origem in microdados.items():
+            destino = destino_microdados / nome
+            if origem.resolve() != destino.resolve():
+                shutil.copy2(origem, destino)
+            print(f"[OK] {nome} ({destino.stat().st_size:,} bytes)")
+
+    ausentes = [
+        nome for nome in MICRODADOS_ESPERADOS
+        if not (destino_microdados / nome).exists()
+    ]
+    if ausentes:
         print(
-            "\n⚠ AÇÃO MANUAL NECESSÁRIA: TS_ALUNO.csv não encontrado.\n"
-            f"  A pasta já foi criada em: {PASTA_MICRODADOS}\n"
-            "  Baixe o microdado oficial do INEP (Avaliação da "
-            "Alfabetização) e suba o arquivo TS_ALUNO.csv nessa pasta "
-            "pela interface do Databricks (Catalog → workspace → bronze "
-            "→ Volumes → raw_files → microdados_inep → DADOS → "
-            "Upload to this volume) antes de rodar 01_bronze_batch.py."
+            "\n⚠ Microdados ausentes: " + ", ".join(ausentes)
+            + f"\n  Coloque os arquivos em data/source/microdados_inep/DADOS/ "
+            f"ou no Volume {destino_microdados}."
         )
+    else:
+        print(f"✓ Todos os microdados disponíveis em: {destino_microdados}")
 
 # COMMAND ----------
 
