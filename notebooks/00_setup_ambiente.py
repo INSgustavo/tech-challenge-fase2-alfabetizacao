@@ -30,9 +30,14 @@
 
 CATALOG = "workspace"
 
-for schema in ["bronze", "silver", "gold", "observability"]:
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{schema}")
-    print(f"Schema disponível: {CATALOG}.{schema}")
+EM_DATABRICKS = "spark" in globals() and "dbutils" in globals()
+
+if EM_DATABRICKS:
+    for schema in ["bronze", "silver", "gold", "observability"]:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.{schema}")
+        print(f"Schema disponível: {CATALOG}.{schema}")
+else:
+    print("Modo local: schemas e tabelas Delta serão ignorados.")
 
 # COMMAND ----------
 
@@ -43,14 +48,15 @@ for schema in ["bronze", "silver", "gold", "observability"]:
 
 # COMMAND ----------
 
-for schema, volume in [
-    ("bronze", "raw_files"),
-    ("bronze", "streaming_landing"),
-    ("observability", "checkpoints"),
-    ("observability", "quarantine"),
-]:
-    spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{schema}.{volume}")
-    print(f"Volume disponível: /Volumes/{CATALOG}/{schema}/{volume}/")
+if EM_DATABRICKS:
+    for schema, volume in [
+        ("bronze", "raw_files"),
+        ("bronze", "streaming_landing"),
+        ("observability", "checkpoints"),
+        ("observability", "quarantine"),
+    ]:
+        spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{schema}.{volume}")
+        print(f"Volume disponível: /Volumes/{CATALOG}/{schema}/{volume}/")
 
 # COMMAND ----------
 
@@ -62,33 +68,34 @@ for schema, volume in [
 
 # COMMAND ----------
 
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {CATALOG}.observability.pipeline_metrics (
-    run_id STRING,
-    task_name STRING,
-    status STRING,
-    started_at TIMESTAMP,
-    finished_at TIMESTAMP,
-    rows_read BIGINT,
-    rows_written BIGINT,
-    rows_rejected BIGINT,
-    max_event_time TIMESTAMP,
-    schema_version STRING,
-    error_message STRING
-) USING DELTA
-""")
+if EM_DATABRICKS:
+    spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {CATALOG}.observability.pipeline_metrics (
+        run_id STRING,
+        task_name STRING,
+        status STRING,
+        started_at TIMESTAMP,
+        finished_at TIMESTAMP,
+        rows_read BIGINT,
+        rows_written BIGINT,
+        rows_rejected BIGINT,
+        max_event_time TIMESTAMP,
+        schema_version STRING,
+        error_message STRING
+    ) USING DELTA
+    """)
 
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {CATALOG}.observability.quarantine_records (
-    run_id STRING,
-    task_name STRING,
-    rejection_reason STRING,
-    payload STRING,
-    ingestion_timestamp TIMESTAMP
-) USING DELTA
-""")
+    spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {CATALOG}.observability.quarantine_records (
+        run_id STRING,
+        task_name STRING,
+        rejection_reason STRING,
+        payload STRING,
+        ingestion_timestamp TIMESTAMP
+    ) USING DELTA
+    """)
 
-print(f"Ambiente validado com Spark {spark.version}")
+    print(f"Ambiente validado com Spark {spark.version}")
 
 # COMMAND ----------
 
@@ -265,12 +272,9 @@ try:
     )
     BASE = Path("/Workspace" + _notebook_path).parent.parent
     print(f"BASE detectado automaticamente: {BASE}")
-except Exception as exc:
-    raise RuntimeError(
-        "Não foi possível detectar a raiz do projeto automaticamente "
-        f"({type(exc).__name__}: {exc}). Isso só deveria falhar rodando "
-        "fora de um notebook Databricks de verdade."
-    ) from exc
+except Exception:
+    BASE = resolver_base()
+    print(f"BASE local detectada: {BASE}")
 
 RAW = BASE / "data" / "raw"
 EXT = BASE / "data" / "external"
@@ -915,6 +919,10 @@ VOLUME_BRONZE = Path("/Volumes/workspace/bronze/raw_files")
 
 
 def copiar_raw_para_bronze():
+    if not EM_DATABRICKS:
+        print("Modo local: fontes permanecem em data/raw; Volume não utilizado.")
+        return
+
     VOLUME_BRONZE.mkdir(parents=True, exist_ok=True)
 
     # O TS_ALUNO.csv não é gerado por este script (é o microdado oficial do
@@ -981,4 +989,5 @@ copiar_raw_para_bronze()
 
 # COMMAND ----------
 
-dbutils.notebook.exit("4 schemas, 4 volumes e 2 tabelas de observabilidade prontos")
+if EM_DATABRICKS:
+    dbutils.notebook.exit("4 schemas, 4 volumes e 2 tabelas de observabilidade prontos")

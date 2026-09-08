@@ -503,7 +503,12 @@ GitHub Actions não faz parte da implementação concluída desta fase.
 
 ## FinOps e performance
 
-A decisão de performance foi revista usando o volume real de **2.120.560 registros de alunos**, e não uma amostra sintética pequena.
+A decisão de performance usa os volumes das fontes versionadas e as contagens
+produzidas pelo notebook `08_monitoring.py`. Neste checkout, as fontes locais
+possuem **37.344 metas municipais**, **5.571 municípios** e **10.584 registros do
+indicador municipal**. O volume de alunos não é versionado: `TS_ALUNO.csv` é
+carregado manualmente no Volume do Databricks, portanto sua contagem deve ser
+considerada somente quando o run registrar `bronze.alunos`.
 
 Práticas adotadas:
 
@@ -524,10 +529,10 @@ particiona":
 
 | Tabela | Linhas | Particionada? | Motivo |
 |---|---:|---|---|
-| `gold.resumo_uf` | 145 | Não | Volume irrelevante para qualquer estratégia de particionamento. |
-| `gold.indicador_municipio` | 10.584 | Não | Mesmo caso, cabe inteira em um único arquivo Parquet pequeno. |
-| `bronze.alunos` | 2.120.560 | Não, por decisão consciente | O padrão de consulta atual é sempre carga completa (a Silver lê a tabela inteira a cada execução do pipeline, sem filtro por `ano`/`sigla_uf`). Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
-| `gold.base_modelagem_aluno` | 2.120.560 | Não, por decisão consciente | Mesmo motivo, é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar por `ano` hoje criaria só 2 partições, com ganho de file skipping mínimo frente à estatística de arquivo que o Delta já mantém nativamente. |
+| `gold.resumo_uf` | Conforme o run | Não | Volume pequeno; a contagem real é emitida pelo `08_monitoring.py`. |
+| `gold.indicador_municipio` | Conforme o run | Não | O mart é pequeno no padrão atual; a contagem real vem do run do Databricks. |
+| `bronze.alunos` | Conforme o run | Não, por decisão consciente | O padrão de consulta atual é sempre carga completa (a Silver lê a tabela inteira a cada execução do pipeline, sem filtro por `ano`/`sigla_uf`). Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
+| `gold.base_modelagem_aluno` | Conforme o run | Não, por decisão consciente | Mesmo motivo, é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
