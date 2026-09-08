@@ -557,30 +557,12 @@ Nem toda tabela da Gold tem o mesmo volume, então a decisão de particionar foi
 avaliada tabela a tabela, não por uma regra genérica de "tabela pequena não
 particiona":
 
-**`gold.resumo_uf`**
-
-- Linhas: **145** na última execução validada.
-- Particionada: não. O volume é pequeno no padrão atual.
-
-**`gold.indicador_municipio`**
-
-- Linhas: **10.584** na última execução validada.
-- Particionada: não. O mart é pequeno no padrão atual.
-
-**`bronze.alunos`**
-
-- Linhas: **2.120.560** na última execução validada.
-- Particionada: não, por decisão consciente. A Silver lê a tabela inteira a
-      cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem um padrão
-      de leitura seletiva real não reduz custo e adiciona overhead de metadados no
-      Delta.
-
-**`gold.base_modelagem_aluno`**
-
-- Linhas: **2.120.560** na última execução validada, derivadas de
-      `silver.alunos_modelagem_aprovados`.
-- Particionada: não, pelo mesmo motivo de `bronze.alunos`. O notebook de ML
-      consome a tabela inteira, sem filtro incremental.
+| Tabela | Linhas | Particionada? | Motivo |
+|---|---:|---|---|
+| `gold.resumo_uf` | **145** | Não | Volume pequeno no padrão atual. |
+| `gold.indicador_municipio` | **10.584** | Não | O mart é pequeno no padrão atual. |
+| `bronze.alunos` | **2.120.560** | Não, por decisão consciente | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
+| `gold.base_modelagem_aluno` | **2.120.560** | Não, por decisão consciente | É consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
