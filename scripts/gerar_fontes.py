@@ -58,6 +58,37 @@ except ImportError as exc:
         "Este script requer pandas. No Databricks ele já costuma estar disponível."
     ) from exc
 
+# openpyxl é exigido pelo pandas para ler os .xlsx oficiais (ARQUIVO_UF /
+# ARQUIVO_MUNICIPIO). Não vem por padrão no runtime serverless do Databricks.
+# A instalação automática tem timeout pra nunca travar indefinidamente — se o
+# ambiente bloquear a saída de rede do subprocess (comum em serverless com
+# rede restrita), o script falha rápido com instrução clara em vez de girar
+# pra sempre.
+try:
+    import openpyxl  # noqa: F401
+except ImportError:
+    import subprocess
+    import sys
+
+    print("openpyxl não encontrado — tentando instalar automaticamente...")
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--quiet", "openpyxl"],
+            timeout=60,
+        )
+        import openpyxl  # noqa: F401
+
+        print("✓ openpyxl instalado.")
+    except Exception as exc:
+        raise RuntimeError(
+            "Não foi possível instalar openpyxl automaticamente "
+            f"({exc}). Rode manualmente numa célula separada, antes deste "
+            "script:\n\n"
+            "    %pip install openpyxl\n"
+            "    dbutils.library.restartPython()\n\n"
+            "E execute este script de novo depois disso."
+        ) from exc
+
 
 ARQUIVO_UF = "resultados_e_metas_ufs_2024_2.xlsx"
 ARQUIVO_MUNICIPIO = "resultados_e_metas_municipios_2024.xlsx"
