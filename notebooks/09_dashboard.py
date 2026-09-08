@@ -4763,9 +4763,4 @@ print("✓ Fontes, pipeline, território, jornada 2030, desigualdade, município
 print("  streaming, alunos/743, qualidade, decisão e IA/Fase 3 incluídos.")
 print(f"✓ Gold base_modelagem_aluno: {alunos_gold_count:,} registros.")
 
-displayHTML(
-    f"<p><strong>Dashboard publicado:</strong> "
-    f"<a href='{dashboard_link}' target='_blank'>{DASHBOARD_HTML}</a> "
-    f"({dashboard_size_kb:.1f} KB)</p>"
-)
 displayHTML(html_final)
