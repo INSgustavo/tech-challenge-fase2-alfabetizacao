@@ -8,7 +8,7 @@ A pipeline oficial não depende de dados sintéticos para substituir fonte ausen
 
 ---
 
-## 1. INEP — Indicador de Alfabetização por UF
+## 1. INEP - Indicador de Alfabetização por UF
 
 **Arquivo:** `br_inep_avaliacao_alfabetizacao_uf.csv.gz`  
 **Tipo:** Batch  
@@ -26,11 +26,11 @@ Principais campos:
 - `media_portugues`
 - `proporcao_aluno_nivel_0` a `proporcao_aluno_nivel_8`
 
-A taxa chega em percentual `0–100` na Bronze e é normalizada para `0–1` na Silver.
+A taxa chega em percentual `0-100` na Bronze e é normalizada para `0-1` na Silver.
 
 ---
 
-## 2. INEP — Indicador de Alfabetização por Município
+## 2. INEP - Indicador de Alfabetização por Município
 
 **Arquivo:** `br_inep_avaliacao_alfabetizacao_municipio.csv.gz`  
 **Tipo:** Batch  
@@ -52,7 +52,7 @@ Essa entidade alimenta os marts municipais com dado oficial.
 
 ---
 
-## 3. INEP — Metas oficiais
+## 3. INEP - Metas oficiais
 
 ### 3.1 Meta Brasil
 
@@ -87,7 +87,7 @@ Meta municipal não herda meta de UF como fallback.
 
 ---
 
-## 4. INEP — Microdados de alunos
+## 4. INEP - Microdados de alunos
 
 **Arquivo oficial:** `microdados_inep/DADOS/TS_ALUNO.csv`  
 **Destino:** `workspace.bronze.alunos`  
@@ -124,7 +124,7 @@ O corte de 743 pontos é aplicado no grão de aluno.
 
 ---
 
-## 5. IBGE — Dimensão de UFs
+## 5. IBGE - Dimensão de UFs
 
 **Arquivo:** `data/external/estados.csv`  
 **Destino:** `workspace.bronze.uf`  
@@ -139,7 +139,7 @@ Usada para:
 
 ---
 
-## 6. IBGE — Dimensão de Municípios
+## 6. IBGE - Dimensão de Municípios
 
 **Arquivo:** `data/external/municipios.csv`  
 **Destino:** `workspace.bronze.municipio`  

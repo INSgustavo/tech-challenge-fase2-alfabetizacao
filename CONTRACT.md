@@ -1,4 +1,4 @@
-# CONTRACT.md — Contrato comum do pipeline
+# CONTRACT.md - Contrato comum do pipeline
 
 Este documento define as regras compartilhadas entre ingestão, transformação, qualidade e consumo do pipeline de alfabetização. Mudanças de schema, granularidade, domínio ou regra de negócio devem ser revisadas pelo time antes de chegar às camadas consumidoras.
 
@@ -38,7 +38,7 @@ Este documento define as regras compartilhadas entre ingestão, transformação,
 | Meta Brasil | INEP | ano | `bronze.meta_brasil` |
 | Meta UF | INEP | ano + UF | `bronze.meta_uf` |
 | Meta município | INEP | ano + município | `bronze.meta_municipio` |
-| Microdados de alunos | INEP — `TS_ALUNO.csv` | aluno | `bronze.alunos` |
+| Microdados de alunos | INEP - `TS_ALUNO.csv` | aluno | `bronze.alunos` |
 | Replay de eventos oficiais | derivado do indicador municipal oficial | evento | `bronze.eventos_streaming` |
 
 Não existe fallback sintético para substituir fonte oficial ausente.

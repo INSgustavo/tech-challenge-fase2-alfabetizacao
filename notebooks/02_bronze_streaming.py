@@ -4,7 +4,7 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 02 — Bronze Streaming (P3)
+# MAGIC # 02 - Bronze Streaming (P3)
 # MAGIC Replay de registros OFICIAIS da Bronze municipal em JSON + consumer
 # MAGIC Structured Streaming com `AvailableNow`.
 # MAGIC
@@ -73,7 +73,7 @@ SCHEMA = StructType([
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1. Producer — replay de dados oficiais
+# MAGIC ## 1. Producer replay de dados oficiais
 # MAGIC
 # MAGIC Em vez de gerar taxas aleatórias, selecionamos registros reais da tabela
 # MAGIC municipal oficial já ingerida na Bronze.
@@ -191,7 +191,7 @@ print(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Consumer — contrato + quarentena + deduplicação
+# MAGIC ## 2. Consumer - contrato + quarentena + deduplicação
 
 # COMMAND ----------
 
@@ -378,3 +378,8 @@ print(
 # MAGIC Em produção:
 # MAGIC
 # MAGIC `INEP / sistema produtor → Kafka/Event Hubs → Structured Streaming → Bronze`
+
+# COMMAND ----------
+
+total_eventos = spark.table(TARGET).count()
+dbutils.notebook.exit(f"eventos_streaming: {total_eventos:,} linhas")

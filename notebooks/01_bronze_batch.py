@@ -4,7 +4,7 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 01 — Bronze Batch (P2)
+# MAGIC # 01 - Bronze Batch (P2)
 # MAGIC Lê as fontes oficiais preparadas em `data/raw/` e grava em Delta sem transformação de negócio.
 # MAGIC
 # MAGIC ## Como subir os dados
@@ -51,7 +51,7 @@ SCHEMA_VERSION = "2.0"
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1. Avaliação de alfabetização — UF
+# MAGIC ## 1. Avaliação de alfabetização - UF
 # MAGIC
 # MAGIC Fonte oficial do INEP distribuída via Base dos Dados.
 # MAGIC O conteúdo é ingerido sem transformação de negócio.
@@ -114,7 +114,7 @@ print(f"✓ avaliacao_alfabetizacao: {destino_uf:,} linhas")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Avaliação de alfabetização — Município
+# MAGIC ## 2. Avaliação de alfabetização - Município
 # MAGIC
 # MAGIC Indicador municipal oficial extraído da planilha do INEP por
 # MAGIC `scripts/gerar_fontes.py`.
@@ -288,7 +288,7 @@ for tabela, config in arquivos_batch.items():
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. Microdados oficiais de alunos — INEP
+# MAGIC ## 4. Microdados oficiais de alunos - INEP
 # MAGIC
 # MAGIC Ingestão bruta do arquivo oficial `TS_ALUNO.csv`.
 # MAGIC A Bronze preserva os nomes e o conteúdo da fonte; normalizações e
@@ -409,3 +409,10 @@ if falhas:
     )
 
 print("\n✓ Bronze Batch concluída com todas as fontes oficiais.")
+
+# COMMAND ----------
+
+dbutils.notebook.exit(
+    f"Bronze validada: alunos={destino_alunos:,} linhas, "
+    f"{len(tabelas_obrigatorias)} tabelas obrigatórias confirmadas"
+)

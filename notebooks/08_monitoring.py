@@ -4,7 +4,7 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 08 — Monitoramento e observabilidade (P3)
+# MAGIC # 08 - Monitoramento e observabilidade (P3)
 # MAGIC Consolida volume e disponibilidade das tabelas, **latência do streaming**
 # MAGIC (percentis), **sistema de alertas** com thresholds e dashboard consolidado.
 # MAGIC Tudo persistido em `observability.pipeline_metrics`.
@@ -93,7 +93,7 @@ for table in TABELAS:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Latência do streaming — percentis (event_time → ingestão)
+# MAGIC ## 2. Latência do streaming - percentis (event_time → ingestão)
 
 # COMMAND ----------
 
@@ -173,7 +173,7 @@ else:
 # COMMAND ----------
 
 print("═" * 70)
-print("  PIPELINE ALFABETIZAÇÃO — DASHBOARD DE MÉTRICAS")
+print("  PIPELINE ALFABETIZAÇÃO - DASHBOARD DE MÉTRICAS")
 print("═" * 70)
 
 print(
@@ -273,4 +273,9 @@ spark.createDataFrame(rows, schema=schema_metrics).write.mode("append").saveAsTa
 print(f"✓ métricas persistidas (run_id={RUN_ID})")
 if alertas:
     print("\n🚨 ALERTAS:")
-    
+    for alerta in alertas:
+        print(f"  - {alerta}")
+
+dbutils.notebook.exit(
+    f"Monitoramento: {len(alertas)} alerta(s) ativo(s), métricas persistidas"
+)

@@ -44,7 +44,7 @@ Fontes
 
 ## Prioridade de implementação
 
-### Prioridade 1 — corrigir incoerências
+### Prioridade 1 - corrigir incoerências
 
 - corrigir grão da Gold;
 - integrar o streaming na Silver;
@@ -52,7 +52,7 @@ Fontes
 - remover métricas não comprovadas do diagrama e README;
 - criar `.gitignore` válido.
 
-### Prioridade 2 — confiabilidade
+### Prioridade 2 - confiabilidade
 
 - schema explícito;
 - `record_id` e `event_id`;
@@ -60,7 +60,7 @@ Fontes
 - Quality Gate;
 - tabela de auditoria.
 
-### Prioridade 3 — diferenciais
+### Prioridade 3 - diferenciais
 
 - replay da quarentena;
 - CI;

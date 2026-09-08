@@ -8,7 +8,7 @@
 # ]
 # ///
 # MAGIC %md
-# MAGIC # 07 — Aplicação em IA (P4) — MLflow
+# MAGIC # 07 Aplicação em IA (P4) MLflow
 # MAGIC Modelo de regressão que prevê a **taxa de alfabetização** de um
 # MAGIC município a partir de atributos estruturais (ano, UF, rede). Compara
 # MAGIC um **baseline** (média) com um modelo real e registra tudo no MLflow.
@@ -19,13 +19,15 @@
 # MAGIC limitações no model card no fim do notebook.
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Setup
 # MAGIC Imports e silenciamento do warning inofensivo do MLflow
 # MAGIC (`Py4JSecurityException` ao tentar resolver tags automáticas de
-# MAGIC contexto — bloqueado pelo cluster, não afeta o resultado).
+# MAGIC contexto bloqueado pelo cluster, não afeta o resultado).
 
 # COMMAND ----------
+
 CATALOG = "workspace"
 
 import logging
@@ -44,10 +46,11 @@ from sklearn.preprocessing import OneHotEncoder
 
 # O cluster bloqueia a chamada extraContext usada pelo MLflow para
 # resolver tags automáticas de contexto (Py4JSecurityException). É
-# inofensivo, mas polui a saída — silenciado no nível ERROR.
+# inofensivo, mas polui a saída - silenciado no nível ERROR.
 logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 2. Montagem do dataset
 # MAGIC Lê `gold.indicador_municipio`, remove linhas sem o alvo, e separa
@@ -55,6 +58,7 @@ logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
 # MAGIC a amostra for pequena demais pra dividir).
 
 # COMMAND ----------
+
 pdf = (
     spark.table(f"{CATALOG}.gold.indicador_municipio")
     .select("ano", "sigla_uf", "rede", "taxa_alfabetizacao_media")
@@ -70,7 +74,7 @@ TARGET = "taxa_alfabetizacao_media"
 X = pdf[FEATURES_CAT + FEATURES_NUM]
 y = pdf[TARGET]
 
-# Split — com fallback se houver poucos registros
+# Split - com fallback se houver poucos registros
 if len(pdf) >= 10:
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 else:
@@ -78,6 +82,7 @@ else:
     X_train, X_test, y_train, y_test = X, X, y, y
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. Funções auxiliares e experimento MLflow
 # MAGIC `avaliar` calcula MAE/RMSE/R² no conjunto de teste. `preprocess` faz
@@ -85,6 +90,7 @@ else:
 # MAGIC criado em `/Shared/`, visível pra todo o grupo.
 
 # COMMAND ----------
+
 def avaliar(model, X_te, y_te):
     pred = model.predict(X_te)
     return {
@@ -101,13 +107,15 @@ preprocess = ColumnTransformer(
 mlflow.set_experiment(f"/Shared/alfabetizacao_taxa_municipio")
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## 4. Baseline — DummyRegressor
-# MAGIC Modelo trivial (prevê sempre a média) — é o piso de comparação: se o
+# MAGIC ## 4. Baseline DummyRegressor
+# MAGIC Modelo trivial (prevê sempre a média) é o piso de comparação: se o
 # MAGIC modelo real não bater esse baseline, ele não está aprendendo nada de
 # MAGIC útil.
 
 # COMMAND ----------
+
 with mlflow.start_run(run_name="baseline_media") as run_base:
     baseline = Pipeline([("prep", preprocess), ("model", DummyRegressor(strategy="mean"))])
     baseline.fit(X_train, y_train)
@@ -129,12 +137,14 @@ with mlflow.start_run(run_name="baseline_media") as run_base:
     print("Baseline:", metrics_base)
 
 # COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## 5. Modelo — RandomForestRegressor
+# MAGIC ## 5. Modelo - RandomForestRegressor
 # MAGIC O modelo de verdade, treinado com os mesmos dados e features do
 # MAGIC baseline, pra comparação justa.
 
 # COMMAND ----------
+
 with mlflow.start_run(run_name="random_forest") as run_rf:
     rf = Pipeline([
         ("prep", preprocess),
@@ -161,11 +171,13 @@ with mlflow.start_run(run_name="random_forest") as run_rf:
     print("RandomForest:", metrics_rf)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 6. Comparação baseline x modelo
-# MAGIC Decide o vencedor por MAE (erro médio absoluto) — quanto menor, melhor.
+# MAGIC Decide o vencedor por MAE (erro médio absoluto) - quanto menor, melhor.
 
 # COMMAND ----------
+
 comparacao = pd.DataFrame([
     {"modelo": "baseline_media", **metrics_base},
     {"modelo": "random_forest", **metrics_rf},
@@ -176,13 +188,15 @@ melhor = "random_forest" if metrics_rf["mae"] <= metrics_base["mae"] else "basel
 print(f"\nMelhor modelo por MAE: {melhor}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 7. Model card
 # MAGIC Documento com objetivo, dados, features, métricas e limitações do
-# MAGIC modelo — logado como artefato no MLflow, não só impresso na tela.
+# MAGIC modelo - logado como artefato no MLflow, não só impresso na tela.
 
 # COMMAND ----------
-model_card = f"""# Model Card — Previsão da taxa de alfabetização por município
+
+model_card = f"""# Model Card - Previsão da taxa de alfabetização por município
 
 ## Objetivo
 Estimar `taxa_alfabetizacao_media` de um município a partir de atributos
@@ -196,7 +210,7 @@ estruturais (ano, UF, rede de ensino).
 - Categóricas: {FEATURES_CAT} (one-hot).
 - Numéricas: {FEATURES_NUM}.
 - **Excluídas de propósito** (vazamento): `media_portugues`,
-  `pct_registros_alfabetizados` — derivadas do próprio alvo.
+  `pct_registros_alfabetizados` - derivadas do próprio alvo.
 
 ## Métricas (conjunto de teste)
 - Baseline (média): MAE={metrics_base['mae']:.4f} | RMSE={metrics_base['rmse']:.4f} | R2={metrics_base['r2']:.4f}
@@ -226,10 +240,12 @@ with mlflow.start_run(run_name="model_card"):
 print(model_card)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 8. Retorno para o pipeline runner
 # MAGIC Devolve qual modelo venceu, pra aparecer no resumo final da
 # MAGIC execução em vez de só "concluído".
 
 # COMMAND ----------
+
 dbutils.notebook.exit(melhor)

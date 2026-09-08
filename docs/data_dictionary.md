@@ -36,7 +36,7 @@
 | `sigla_uf` | string | Sim | Sigla da UF. |
 | `serie` | int | Sim | Série avaliada. |
 | `rede` | int | Sim | Código da rede de ensino. |
-| `taxa_alfabetizacao` | double | Não | Indicador oficial em percentual, escala `0–100` na Bronze. |
+| `taxa_alfabetizacao` | double | Não | Indicador oficial em percentual, escala `0-100` na Bronze. |
 | `media_portugues` | double | Não | Média agregada de proficiência em Língua Portuguesa. |
 | `proporcao_aluno_nivel_0` | double | Não | Proporção de alunos no nível 0. |
 | `proporcao_aluno_nivel_1` | double | Não | Proporção de alunos no nível 1. |
@@ -70,7 +70,7 @@
 | `id_municipio` | string | Sim | Código IBGE do município com 7 dígitos. |
 | `serie` | int | Não | Série avaliada quando disponível. |
 | `rede` | int | Não | Código da rede. |
-| `taxa_alfabetizacao` | double | Não | Indicador oficial em percentual `0–100` na Bronze. |
+| `taxa_alfabetizacao` | double | Não | Indicador oficial em percentual `0-100` na Bronze. |
 | `media_portugues` | double | Não | Média agregada de proficiência, quando disponível. |
 | `ingestion_timestamp` | timestamp | Sim | Momento da ingestão. |
 | `source_file` | string | Sim | Arquivo de origem. |
@@ -239,7 +239,7 @@ O corte é aplicado no **grão de aluno**.
 | `sigla_uf` | string | Sim | UF. |
 | `id_municipio` | string | Sim | Município com 7 dígitos. |
 | `rede` | int | Sim | Rede de ensino. |
-| `taxa_alfabetizacao` | double | Sim | Percentual oficial na escala `0–100` na Bronze streaming. |
+| `taxa_alfabetizacao` | double | Sim | Percentual oficial na escala `0-100` na Bronze streaming. |
 | `source` | string | Sim | `INEP_OFICIAL_REPLAY` para evento válido. |
 | `_source_file` | string | Sim | Arquivo JSON lido pelo stream. |
 | `_ingestion_timestamp` | timestamp | Sim | Momento de processamento do evento. |
@@ -275,7 +275,7 @@ O payload inválido nunca integra o fato analítico.
 | `rede` | int | Código normalizado da rede. |
 | `rede_label` | string | Rótulo da rede. |
 | `media_portugues` | double | Média agregada de proficiência quando disponível. |
-| `taxa_alfabetizacao` | double | Indicador normalizado para fração `0–1`. |
+| `taxa_alfabetizacao` | double | Indicador normalizado para fração `0-1`. |
 | `alfabetizado` | boolean | Flag auxiliar quando a média agregada permite cálculo; não representa classificação individual. |
 | `event_id` | string | ID do evento para fatos provenientes do streaming; nulo para batch. |
 | `event_time` | timestamp | Timestamp do replay para fatos streaming. |
@@ -297,9 +297,9 @@ O payload inválido nunca integra o fato analítico.
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `meta_municipio` | double | Meta municipal oficial normalizada para `0–1`. |
-| `meta_uf` | double | Meta estadual oficial normalizada para `0–1`. |
-| `meta_brasil` | double | Meta nacional oficial normalizada para `0–1`. |
+| `meta_municipio` | double | Meta municipal oficial normalizada para `0-1`. |
+| `meta_uf` | double | Meta estadual oficial normalizada para `0-1`. |
+| `meta_brasil` | double | Meta nacional oficial normalizada para `0-1`. |
 | `meta_taxa` | double | Meta correspondente ao mesmo grão da medição. |
 
 Regra de `meta_taxa`:
@@ -603,8 +603,8 @@ Esse de-para deve permanecer rastreável à documentação oficial utilizada pel
 
 ## Taxa de alfabetização
 
-- Bronze oficial: percentual `0–100`.
-- Silver e Gold: fração `0–1`.
+- Bronze oficial: percentual `0-100`.
+- Silver e Gold: fração `0-1`.
 
 ## Metas
 

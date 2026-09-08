@@ -4,14 +4,14 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 03 — Silver canônica
+# MAGIC # 03 Silver canônica
 # MAGIC Normaliza chaves, **integra as seis fontes do edital** e publica o modelo
 # MAGIC canônico:
-# MAGIC 1. medições batch (INEP, grão UF) + streaming (grão município) — fatos;
-# MAGIC 2. `bronze.municipio` e `bronze.uf` — dimensões territoriais (join);
-# MAGIC 3. `bronze.meta_brasil`, `bronze.meta_uf`, `bronze.meta_municipio` — metas
+# MAGIC 1. medições batch (INEP, grão UF) + streaming (grão município) - fatos;
+# MAGIC 2. `bronze.municipio` e `bronze.uf` - dimensões territoriais (join);
+# MAGIC 3. `bronze.meta_brasil`, `bronze.meta_uf`, `bronze.meta_municipio` - metas
 # MAGIC    associadas a cada medição conforme o grão (join);
-# MAGIC 4. `bronze.alunos` — agregado por ano+UF+rede como enriquecimento (join).
+# MAGIC 4. `bronze.alunos` - agregado por ano+UF+rede como enriquecimento (join).
 # MAGIC
 # MAGIC Cada registro analítico sai com `fonte_dados = 'oficial_inep'`.
 # MAGIC Dados simulados não participam mais da Silver oficial.
@@ -43,13 +43,13 @@ def existe(schema, name):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1. Fatos — batch (grão UF, dado oficial)
+# MAGIC ## 1. Fatos - batch (grão UF, dado oficial)
 
 # COMMAND ----------
 
 batch = spark.table(tbl("bronze", "avaliacao_alfabetizacao"))
 
-# A fonte batch (avaliação SAEB agregada) tem grão UF — NÃO existe id_municipio
+# A fonte batch (avaliação SAEB agregada) tem grão UF - NÃO existe id_municipio
 # no CSV. `taxa_alfabetizacao` chega em percentual (0-100) e é normalizada para
 # 0-1 (contrato, seção 2); o streaming já chega em fração.
 batch_canonical = (
@@ -74,7 +74,7 @@ batch_canonical = (
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 1b. Fatos — batch municipal (dado oficial obrigatório)
+# MAGIC ## 1b. Fatos - batch municipal (dado oficial obrigatório)
 # MAGIC O indicador municipal oficial já é ingerido na Bronze.
 # MAGIC Não existe mais fallback para dado simulado.
 
@@ -112,7 +112,7 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Fatos — streaming (grão município, replay de dado oficial)
+# MAGIC ## 2. Fatos - streaming (grão município, replay de dado oficial)
 
 # COMMAND ----------
 
@@ -159,7 +159,7 @@ fatos = fatos.unionByName(stream_canonical.select(*columns), allowMissingColumns
 
 # MAGIC %md
 # MAGIC ## 4. Integração com as dimensões territoriais (município e UF)
-# MAGIC Joins com `bronze.municipio` e `bronze.uf` — aqui ocorre a integração das
+# MAGIC Joins com `bronze.municipio` e `bronze.uf` - aqui ocorre a integração das
 # MAGIC bases exigida pelo edital, e não apenas a união batch+streaming.
 
 # COMMAND ----------
@@ -260,7 +260,7 @@ else:
 # meta do grão da medição:
 # município usa EXCLUSIVAMENTE a meta municipal oficial;
 # UF usa EXCLUSIVAMENTE a meta estadual oficial.
-# Se a meta oficial não existir, permanece NULL — sem herança/fallback.
+# Se a meta oficial não existir, permanece NULL - sem herança/fallback.
 fatos = fatos.withColumn(
     "meta_taxa",
     F.when(F.col("grao") == "municipio", F.col("meta_municipio"))
@@ -807,3 +807,10 @@ print(f"✓ Silver alunos: {rows_silver_alunos:,}")
 print(f"✓ Target oficial 0/1: {targets_validos:,}")
 print(f"✓ Proficiência disponível: {proficiencias_validas:,}")
 print(f"✓ Tabela: {ALUNOS_SILVER}")
+
+# COMMAND ----------
+
+dbutils.notebook.exit(
+    f"Silver validada: alunos={rows_silver_alunos:,} linhas, "
+    f"proficiência disponível={proficiencias_validas:,}"
+)

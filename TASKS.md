@@ -1,4 +1,4 @@
-# TASKS.md — Backlog do time
+# TASKS.md - Backlog do time
 
 Status atualizado em 2026-09-01.
 
@@ -16,14 +16,14 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [x] Ensaiar o roteiro de demonstração. *(docs/runbook.md + docs/video_roteiro.md)*
 - [ ] Criar tag da versão final. *(pendente de release final / geração de tag no GitHub)*
 
-## P1 — Plataforma, DevOps e governança
+## P1 - Plataforma, DevOps e governança
 
 ### Essencial
 
 - [x] Configurar Databricks Repos e estratégia `feature/* → develop → main`. *(CONTRIBUTING.md)*
-- [x] Criar schemas e volumes do Unity Catalog. *(notebook 00, evidências 01–03)*
+- [x] Criar schemas e volumes do Unity Catalog. *(notebook 00, evidências 01-03)*
 - [x] Montar o Workflow completo com dependências corretas. *(evidência 32)*
-- [x] Configurar auto-termination e política de cluster. *(serverless — gerenciado pela plataforma)*
+- [x] Configurar auto-termination e política de cluster. *(serverless - gerenciado pela plataforma)*
 - [x] Consolidar README, arquitetura e contrato.
 
 ### Diferenciais
@@ -36,13 +36,13 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [x] Documentar estratégia de custo baseada em métricas reais. *(README, seção FinOps)*
 - [ ] Criar release tag e changelog da entrega. *(pendente de fechamento oficial da versão)*
 
-## P2 — Fontes, profiling e Bronze batch
+## P2 - Fontes, profiling e Bronze batch
 
 ### Essencial
 
 - [x] Mapear as entidades e confirmar a fonte oficial. *(docs/fontes_e_entidades.md)*
 - [x] Completar `docs/data_dictionary.md`.
-- [x] Implementar schemas explícitos. *(notebook 01 — todas as fontes)*
+- [x] Implementar schemas explícitos. *(notebook 01 - todas as fontes)*
 - [x] Gravar as fontes em Delta com metadados técnicos.
 - [x] Reconciliar contagem de origem e destino. *(notebook 01)*
 
@@ -55,14 +55,14 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [ ] Enriquecer com IBGE ou Censo Escolar. *(dimensões IBGE em data/external/; socioeconômico no roadmap)*
 - [ ] Criar uma pequena amostra versionável para testes.
 
-## P3 — Streaming, resiliência e observabilidade
+## P3 - Streaming, resiliência e observabilidade
 
 ### Essencial
 
 - [x] Implementar producer de eventos JSON. *(notebook 02)*
 - [x] Implementar consumer Structured Streaming. *(AvailableNow + foreachBatch)*
 - [x] Usar schema explícito e checkpoint isolado.
-- [x] Registrar volume, latência e falhas. *(notebook 08 — percentis de latência)*
+- [x] Registrar volume, latência e falhas. *(notebook 08 - percentis de latência)*
 
 ### Diferenciais
 
@@ -74,14 +74,14 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 - [x] Simular evento duplicado, atrasado e com schema inválido. *(cenário de demo do notebook 02)*
 - [x] Definir SLIs, SLOs e alertas do pipeline. *(THRESHOLDS no notebook 08)*
 
-## P4 — Silver, Gold, serving e IA
+## P4 - Silver, Gold, serving e IA
 
 ### Essencial
 
 - [x] Criar modelo canônico integrando batch e streaming. *(notebook 03)*
 - [x] Normalizar chaves e domínio de rede.
 - [x] Implementar marts Gold com grão documentado. *(notebook 04)*
-- [x] Implementar controles de qualidade. *(notebook 06 — inclui integridade referencial)*
+- [x] Implementar controles de qualidade. *(notebook 06 - inclui integridade referencial)*
 - [x] Publicar dados no MongoDB. *(notebook 05)*
 - [x] Registrar experimento no MLflow. *(notebook 07)*
 
@@ -99,7 +99,7 @@ Use os marcadores abaixo como checklist. Cada item concluído deve ter evidênci
 
 - [x] README não contém números ou métricas não reproduzidos pelo código.
 - [x] `gold.indicador_municipio` realmente possui `id_municipio` no grão.
-- [x] Silver depende das duas entradas: batch e streaming — **e integra as dimensões, metas e alunos via join**.
+- [x] Silver depende das duas entradas: batch e streaming - **e integra as dimensões, metas e alunos via join**.
 - [x] Quality Gate executa antes da Gold.
 - [x] Workflow inclui setup, ingestão, Silver, qualidade, Gold, serving, ML e monitoramento.
 - [x] Quarentena e auditoria estão demonstráveis. *(evidências + tabelas observability)*

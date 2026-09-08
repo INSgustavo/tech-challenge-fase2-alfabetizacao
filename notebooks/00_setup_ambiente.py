@@ -4,17 +4,19 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 00 — Setup do ambiente
+# MAGIC # 00 Setup do ambiente
 # MAGIC Cria schemas, Volumes e a estrutura de observabilidade, e em seguida
 # MAGIC já prepara e publica as fontes oficiais (lógica de `gerar_fontes.py`
 # MAGIC embutida ao final deste notebook, sem depender de arquivo externo).
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Schemas
 # MAGIC Cria os 4 schemas do projeto no catálogo `workspace`, se ainda não existirem.
 
 # COMMAND ----------
+
 CATALOG = "workspace"
 
 for schema in ["bronze", "silver", "gold", "observability"]:
@@ -22,12 +24,14 @@ for schema in ["bronze", "silver", "gold", "observability"]:
     print(f"Schema disponível: {CATALOG}.{schema}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 2. Volumes
 # MAGIC Cria os 4 Volumes usados pelo pipeline: `raw_files` e `streaming_landing`
 # MAGIC na Bronze, `checkpoints` e `quarantine` na observabilidade.
 
 # COMMAND ----------
+
 for schema, volume in [
     ("bronze", "raw_files"),
     ("bronze", "streaming_landing"),
@@ -38,6 +42,7 @@ for schema, volume in [
     print(f"Volume disponível: /Volumes/{CATALOG}/{schema}/{volume}/")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. Tabelas de observabilidade
 # MAGIC `pipeline_metrics` guarda o resultado de cada execução (linhas lidas,
@@ -45,6 +50,7 @@ for schema, volume in [
 # MAGIC rejeitados por qualquer etapa, com o motivo da rejeição.
 
 # COMMAND ----------
+
 spark.sql(f"""
 CREATE TABLE IF NOT EXISTS {CATALOG}.observability.pipeline_metrics (
     run_id STRING,
@@ -74,6 +80,7 @@ CREATE TABLE IF NOT EXISTS {CATALOG}.observability.quarantine_records (
 print(f"Ambiente validado com Spark {spark.version}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 4. Preparação das fontes oficiais
 # MAGIC A partir daqui, a lógica de `gerar_fontes.py` está embutida direto neste
@@ -88,11 +95,12 @@ print(f"Ambiente validado com Spark {spark.version}")
 # MAGIC   está no lugar certo.
 # MAGIC
 # MAGIC **Ajuste antes de rodar**: a variável `BASE` logo abaixo precisa apontar
-# MAGIC pra pasta do projeto no **seu** Workspace — não tem como detectar isso
+# MAGIC pra pasta do projeto no **seu** Workspace - não tem como detectar isso
 # MAGIC sozinho rodando como célula de notebook (veja o comentário junto da
 # MAGIC variável).
 
 # COMMAND ----------
+
 """
 Gera as fontes do pipeline a partir de dados OFICIAIS.
 
@@ -134,8 +142,6 @@ Compatível com execução como .py, notebook Jupyter e Databricks.
 """
 ##%pip install openpyxl
 
-from __future__ import annotations
-
 import csv
 import gzip
 import hashlib
@@ -155,7 +161,7 @@ except ImportError as exc:
 
 # openpyxl é exigido pelo pandas para ler os .xlsx oficiais (ARQUIVO_UF /
 # ARQUIVO_MUNICIPIO). Não vem por padrão no runtime serverless do Databricks.
-# A instalação automática tem timeout pra nunca travar indefinidamente — se o
+# A instalação automática tem timeout pra nunca travar indefinidamente - se o
 # ambiente bloquear a saída de rede do subprocess (comum em serverless com
 # rede restrita), o script falha rápido com instrução clara em vez de girar
 # pra sempre.
@@ -165,7 +171,7 @@ except ImportError:
     import subprocess
     import sys
 
-    print("openpyxl não encontrado — tentando instalar automaticamente...")
+    print("openpyxl não encontrado - tentando instalar automaticamente...")
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", "--quiet", "openpyxl"],
@@ -235,7 +241,7 @@ def resolver_base() -> Path:
 
 # Detecta a raiz do projeto sozinho, sem ninguém precisar preencher nada.
 # __file__ não existe rodando como célula de notebook, mas o Databricks
-# expõe o caminho do próprio notebook em execução via getContext() — a
+# expõe o caminho do próprio notebook em execução via getContext() - a
 # mesma raiz "notebookPath" que aparece no topo da tela quando você abre
 # 00_setup_ambiente.py, só que lida programaticamente em vez de copiada
 # na mão. Sobe dois níveis (tira "/notebooks" e o nome do arquivo) pra
@@ -683,7 +689,7 @@ def gerar_indicador_municipio(df_mun: pd.DataFrame) -> int:
     taxa_alfabetizacao, media_portugues
 
     A planilha oficial traz percentual de alfabetizados, não média de proficiência.
-    Portanto media_portugues fica nula — sem inventar valor.
+    Portanto media_portugues fica nula - sem inventar valor.
     """
     col_id = col_id_municipio(df_mun)
     col_sigla = achar_sigla_uf(df_mun)
@@ -830,7 +836,7 @@ def validar_entradas():
 
 def main():
     print("=" * 72)
-    print("PREPARAÇÃO DE FONTES OFICIAIS — ALFABETIZAÇÃO")
+    print("PREPARAÇÃO DE FONTES OFICIAIS - ALFABETIZAÇÃO")
     print("=" * 72)
     print(f"BASE   : {BASE}")
     print(f"SOURCE : {SOURCE}")
@@ -903,7 +909,7 @@ def copiar_raw_para_bronze():
     VOLUME_BRONZE.mkdir(parents=True, exist_ok=True)
 
     # O TS_ALUNO.csv não é gerado por este script (é o microdado oficial do
-    # INEP, grande demais pra derivar aqui) — mas a pasta onde ele precisa
+    # INEP, grande demais pra derivar aqui) - mas a pasta onde ele precisa
     # ser enviado manualmente já fica pronta, pra ninguém errar o caminho.
     PASTA_MICRODADOS = VOLUME_BRONZE / "microdados_inep" / "DADOS"
     PASTA_MICRODADOS.mkdir(parents=True, exist_ok=True)
@@ -952,6 +958,7 @@ def copiar_raw_para_bronze():
         )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 5. Execução
 # MAGIC Roda as funções definidas na célula anterior: `main()` gera os CSVs
@@ -959,5 +966,10 @@ def copiar_raw_para_bronze():
 # MAGIC Volume.
 
 # COMMAND ----------
+
 main()
 copiar_raw_para_bronze()
+
+# COMMAND ----------
+
+dbutils.notebook.exit("4 schemas, 4 volumes e 2 tabelas de observabilidade prontos")

@@ -2,7 +2,7 @@
 
 Pipeline Lakehouse para integrar dados oficiais de alfabetização em **batch e streaming**, aplicar regras de qualidade, construir indicadores por município e UF e disponibilizar resultados para análise, serving NoSQL, observabilidade e experimentos de Machine Learning.
 
-> Tech Challenge — Fase 2 · FIAP Pós Tech  
+> Tech Challenge - Fase 2 · FIAP Pós Tech
 > Plataforma principal: Databricks Free Edition · PySpark · Delta Lake · Unity Catalog
 
 <p align="center">
@@ -30,10 +30,10 @@ O pipeline atual não depende de dados sintéticos para construir seus indicador
 | Metas Brasil | INEP oficial | Ano | Referência nacional |
 | Metas UF | INEP oficial | Ano + UF | Comparação resultado x meta |
 | Metas município | INEP oficial | Ano + município | Priorização municipal |
-| Microdados `TS_ALUNO.csv` | Avaliação da Alfabetização 2024 — INEP | Aluno | Regra dos 743 pontos e agregações |
+| Microdados `TS_ALUNO.csv` | Avaliação da Alfabetização 2024 - INEP | Aluno | Regra dos 743 pontos e agregações |
 | Estados e municípios | IBGE | UF / município | Enriquecimento territorial |
 
-As planilhas oficiais são preparadas pelo `scripts/gerar_fontes.py`, que preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json` com informações de rastreabilidade e hash.
+As planilhas oficiais são preparadas pela lógica que hoje está embutida em `00_setup_ambiente.py` (antes era um script separado, `scripts/gerar_fontes.py`), que preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json` com informações de rastreabilidade e hash.
 
 Os antigos dados sintéticos foram retirados do fluxo oficial e mantidos apenas em `data/legacy_fontes_derivadas/` para rastreabilidade histórica.
 
@@ -364,6 +364,22 @@ Delta Lake / Gold = fonte analítica de verdade
 MongoDB           = camada de serving
 ```
 
+Justificativa honesta: nesta entrega não existe uma aplicação externa
+consumindo o MongoDB. A camada foi implementada para demonstrar competência
+em serving NoSQL com `upsert` idempotente, um padrão real de arquitetura de
+dados, e não porque o Delta + SQL serverless fosse insuficiente para os
+volumes atuais, o próprio `09_dashboard.py` prova isso ao consumir a Gold
+em Delta diretamente, sem qualquer camada intermediária.
+
+O cenário em que o MongoDB deixaria de ser apenas demonstrativo e passaria a
+se justificar tecnicamente é o de uma aplicação com requisitos que o Delta
+Lake não atende bem: leitura de documento único com latência de poucos
+milissegundos (ex.: consulta pública por município num app mobile ou
+widget embarcado), sem depender de um cluster/warehouse ativo. Essa é
+exatamente a superfície que a Fase 3 pode explorar, uma API de consulta
+pública sobre os documentos já publicados no Atlas, decisão registrada como
+possível evolução em vez de aplicação real hoje.
+
 A publicação é feita a partir de `gold.indicador_municipio`.
 
 Chave de `upsert`:
@@ -494,12 +510,31 @@ Práticas adotadas:
 - compute serverless e execução sob demanda;
 - Workflow agendado, porém pausado no ambiente acadêmico;
 - Structured Streaming com `AvailableNow`, evitando infraestrutura 24x7;
-- tabelas pequenas não são particionadas;
 - ausência de `OPTIMIZE` e `ZORDER` prematuros;
 - evitar `toPandas()` em grandes coleções;
 - `toPandas()` limitado ao dataset municipal usado na POC de ML;
 - schemas explícitos;
 - métricas de duração e volume persistidas para permitir estimativa de custo.
+
+### Particionamento: decisão explícita por tabela
+
+Nem toda tabela da Gold tem o mesmo volume, então a decisão de particionar foi
+avaliada tabela a tabela, não por uma regra genérica de "tabela pequena não
+particiona":
+
+| Tabela | Linhas | Particionada? | Motivo |
+|---|---:|---|---|
+| `gold.resumo_uf` | 145 | Não | Volume irrelevante para qualquer estratégia de particionamento. |
+| `gold.indicador_municipio` | 10.584 | Não | Mesmo caso, cabe inteira em um único arquivo Parquet pequeno. |
+| `bronze.alunos` | 2.120.560 | Não, por decisão consciente | O padrão de consulta atual é sempre carga completa (a Silver lê a tabela inteira a cada execução do pipeline, sem filtro por `ano`/`sigla_uf`). Particionar sem um padrão de leitura seletiva real não reduz custo, só adiciona overhead de metadados de partição no Delta. |
+| `gold.base_modelagem_aluno` | 2.120.560 | Não, por decisão consciente | Mesmo motivo, é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar por `ano` hoje criaria só 2 partições, com ganho de file skipping mínimo frente à estatística de arquivo que o Delta já mantém nativamente. |
+
+Quando isso deveria ser revisto: se a Fase 3 passar a consultar
+`gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
+uma API filtrando por UF), particionar por `ano` ou `sigla_uf` passa a
+compensar. Hoje, para carga completa, o particionamento é dispensável, não
+por o volume ser pequeno, mas porque o padrão de acesso não seleciona um
+subconjunto dos dados.
 
 ### Custo acadêmico
 
@@ -557,8 +592,6 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 │   ├── 07_ml_mlflow.py
 │   ├── 08_monitoring.py
 │   └── 09_dashboard.py
-├── scripts/
-│   └── gerar_fontes.py
 ├── src/
 │   ├── schemas.py
 │   └── utils.py
@@ -581,36 +614,46 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 
 - Databricks Free Edition;
 - acesso ao catálogo `workspace`;
-- fontes oficiais preparadas em `data/raw/`;
-- arquivos disponíveis no Volume `/Volumes/workspace/bronze/raw_files/`;
+- planilhas oficiais em `data/source/` e dimensões IBGE em `data/external/`;
 - MongoDB Atlas somente se a etapa de serving for demonstrada;
 - secret `alfabetizacao/mongo_uri` somente para publicação real no MongoDB.
 
-> **Atenção — cada pessoa no próprio workspace**: clonar este repositório (via
-> Git folder) traz os notebooks e o código, mas **não** popula o Volume
+> Atenção, cada pessoa no próprio workspace: clonar este repositório (via
+> Git folder) traz os notebooks e o código, mas não popula o Volume
 > automaticamente. Volumes são armazenamento local de cada workspace Free
-> Edition e não são sincronizados pelo Git. Se você está rodando numa conta
-> separada da conta onde os dados já foram gerados, é obrigatório rodar o
-> passo 1 abaixo (`gerar_fontes.py`) e subir os arquivos no **seu próprio**
-> Volume antes de executar `01_bronze_batch.py` — senão ele falha por falta
-> de arquivo, não por erro de código.
+> Edition e não são sincronizados pelo Git. O `00_setup_ambiente.py` já
+> resolve isso sozinho: cria os schemas e o Volume, detecta o caminho do
+> projeto automaticamente (sem precisar preencher nada), e ao final já
+> prepara e copia as fontes oficiais para o Volume.
+
+> Atenção, microdados de aluno (`TS_ALUNO.csv`): esse é o único arquivo que
+> não é gerado automaticamente, é o microdado oficial do INEP, grande demais
+> para derivar por script. Precisa ser baixado da fonte oficial e enviado
+> manualmente por cada pessoa, no próprio workspace, em
+> `/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/TS_ALUNO.csv`
+> (Catalog, workspace, bronze, Volumes, raw_files, Upload to this volume).
+> Sem esse arquivo, `01_bronze_batch.py` falha ao tentar ler um caminho
+> vazio, isso não é bug de código, é arquivo faltando.
 
 ### Ordem
 
-1. Prepare as fontes oficiais com `scripts/gerar_fontes.py`.
-2. Execute `00_setup_ambiente.py`.
-3. Disponibilize os arquivos no Volume Bronze.
-4. Execute `01_bronze_batch.py`.
-5. Execute `02_bronze_streaming.py`.
-6. Execute `03_silver.py`.
-7. Execute `06_quality_checks.py`.
-8. Somente após aprovação, execute `04_gold.py`.
-9. Execute `05_serving_mongodb.py` se houver secret configurado.
-10. Execute `07_ml_mlflow.py`.
-11. Execute `08_monitoring.py`.
-12. Execute `09_dashboard.py`.
+1. Execute `00_setup_ambiente.py`. Ele cria os schemas, cria o Volume
+   `bronze.raw_files`, e já prepara e copia as fontes oficiais para dentro
+   dele (a lógica que antes era um script separado, `gerar_fontes.py`, está
+   embutida neste notebook).
+2. Execute `01_bronze_batch.py`.
+3. Execute `02_bronze_streaming.py`.
+4. Execute `03_silver.py`.
+5. Execute `06_quality_checks.py`.
+6. Somente após aprovação, execute `04_gold.py`.
+7. Execute `05_serving_mongodb.py` se houver secret configurado.
+8. Execute `07_ml_mlflow.py`.
+9. Execute `08_monitoring.py`.
+10. Execute `09_dashboard.py`.
 
-A mesma ordem está representada no Databricks Workflow.
+A mesma ordem está representada no Databricks Workflow (`workflows/job_pipeline.json`)
+e no runner Python (`workflows/00_pipeline_runner.py`), que detecta a pasta
+de notebooks automaticamente e confere os pré-requisitos antes de rodar.
 
 ## Testes
 

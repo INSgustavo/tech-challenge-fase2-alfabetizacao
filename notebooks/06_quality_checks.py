@@ -4,7 +4,7 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 06 — Quality Gate
+# MAGIC # 06 - Quality Gate
 # MAGIC Valida a Silver **antes** da publicação da Gold (contrato, seção 8).
 # MAGIC
 # MAGIC O que este notebook faz:
@@ -72,7 +72,7 @@ if spark.catalog.tableExists(DIM_MUN):
                    .withColumn("_fk_municipio_ok", F.lit(True)))
     s = s.join(ids_validos, on="id_municipio", how="left")
 else:
-    print(f"⚠ {DIM_MUN} não existe — check de FK municipal não aplicado.")
+    print(f"⚠ {DIM_MUN} não existe - check de FK municipal não aplicado.")
     s = s.withColumn("_fk_municipio_ok", F.lit(True))
 
 if spark.catalog.tableExists(DIM_UF):
@@ -82,7 +82,7 @@ if spark.catalog.tableExists(DIM_UF):
                .withColumn("_fk_uf_ok", F.lit(True)))
     s = s.join(ufs_dim, on="sigla_uf", how="left")
 else:
-    print(f"⚠ {DIM_UF} não existe — check de FK de UF não aplicado.")
+    print(f"⚠ {DIM_UF} não existe - check de FK de UF não aplicado.")
     s = s.withColumn("_fk_uf_ok", F.lit(True))
 
 # COMMAND ----------
@@ -115,7 +115,7 @@ rejection_reason = (
           F.lit("municipio_inexistente_na_dimensao"))
     .when(F.col("_fk_uf_ok").isNull(), F.lit("uf_inexistente_na_dimensao"))
     # consistência entre tabelas: UF do registro x UF do município na dimensão
-    .when(F.col("uf_consistente") == False,  # noqa: E712 — coluna booleana nullável
+    .when(F.col("uf_consistente") == False,  # noqa: E712 - coluna booleana nullável
           F.lit("uf_incompativel_com_municipio"))
     .otherwise(F.lit(None))
 )
@@ -313,13 +313,13 @@ schema_metrics = spark.table(
 )
 
 print(f"✓ Auditoria registrada. run_id={RUN_ID}")
-print("✓ Quality Gate APROVADO — Gold liberada.")
+print("✓ Quality Gate APROVADO - Gold liberada.")
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 4. Validações sistêmicas (bloqueantes)
-# MAGIC Falhas aqui reprovam a task — a Gold **não** deve ser publicada.
+# MAGIC Falhas aqui reprovam a task - a Gold **não** deve ser publicada.
 
 # COMMAND ----------
 
@@ -374,7 +374,7 @@ print(f"Auditoria registrada. run_id={RUN_ID}")
 
 if reprovados:
     raise AssertionError(error_message)
-print("Quality Gate APROVADO — Gold liberada.")
+print("Quality Gate APROVADO - Gold liberada.")
 
 # COMMAND ----------
 
@@ -640,7 +640,7 @@ checks_alunos = {
         cobertura_alunos >= COBERTURA_MIN_ALUNOS,
 }
 
-print("\n=== QUALITY GATE SISTÊMICO — ALUNOS ===")
+print("\n=== QUALITY GATE SISTÊMICO - ALUNOS ===")
 
 for nome, ok in checks_alunos.items():
     print(f"{'✓' if ok else '✗'} {nome}")
@@ -764,6 +764,11 @@ print(
 )
 
 print(
-    "✓ Quality Gate ALUNOS APROVADO — "
+    "✓ Quality Gate ALUNOS APROVADO - "
     "base de modelagem liberada para Gold."
+)
+
+dbutils.notebook.exit(
+    f"Quality Gate aprovado: cobertura territorial={cobertura:.1%}, "
+    f"cobertura alunos={cobertura_alunos:.1%}"
 )

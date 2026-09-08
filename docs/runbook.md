@@ -2,8 +2,8 @@
 
 ## Execução padrão
 
-1. Execute `00_setup_ambiente`.
-2. Confirme os arquivos em `raw_files`.
+1. Execute `00_setup_ambiente` (já prepara e copia as fontes oficiais internamente).
+2. Suba manualmente o `TS_ALUNO.csv` no Volume, se ainda não estiver lá.
 3. Execute Bronze batch e streaming.
 4. Consulte as contagens Bronze.
 5. Execute Silver.
@@ -11,6 +11,7 @@
 7. Somente com a qualidade aprovada, execute Gold.
 8. Execute serving e MLflow.
 9. Execute monitoramento e valide o `run_id`.
+10. Execute `09_dashboard` e confira o Command Center renderizado.
 
 ## Falha na ingestão batch
 
@@ -46,7 +47,8 @@
 7. Consulte um município.
 8. Mostre o documento no MongoDB.
 9. Mostre a execução no MLflow.
-10. Finalize com a tabela de auditoria.
+10. Abra o Command Center (`09_dashboard`) e navegue pelas abas.
+11. Finalize com a tabela de auditoria.
 
 ## Evidências a capturar
 
@@ -57,4 +59,5 @@
 - consulta Gold;
 - documento MongoDB;
 - experimento MLflow;
+- Command Center renderizado (print de pelo menos duas abas);
 - métricas de custo e duração.

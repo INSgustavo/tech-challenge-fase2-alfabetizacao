@@ -4,7 +4,7 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 04 — Gold
+# MAGIC # 04 Gold
 # MAGIC Cria os marts analíticos após aprovação do Quality Gate (notebook 06).
 # MAGIC
 # MAGIC **A Gold lê exclusivamente da Silver aprovada** (arquitetura Medalhão:
@@ -13,11 +13,11 @@
 # MAGIC preservar a rastreabilidade da origem oficial do INEP.
 # MAGIC
 # MAGIC Marts publicados:
-# MAGIC 1. `gold.indicador_municipio` — grão: `ano + id_municipio + rede`
-# MAGIC 2. `gold.resumo_uf` — grão: `ano + sigla_uf + rede`
-# MAGIC 3. `gold.meta_vs_resultado` — grão: `ano + território + rede`, com
+# MAGIC 1. `gold.indicador_municipio` - grão: `ano + id_municipio + rede`
+# MAGIC 2. `gold.resumo_uf` - grão: `ano + sigla_uf + rede`
+# MAGIC 3. `gold.meta_vs_resultado` - grão: `ano + território + rede`, com
 # MAGIC    `nivel_territorial` explícito (`uf` | `municipio`)
-# MAGIC 4. `gold.evolucao_temporal` — grão: `ano + território + rede`, com
+# MAGIC 4. `gold.evolucao_temporal` - grão: `ano + território + rede`, com
 # MAGIC    `nivel_territorial` explícito (`uf` | `municipio`)
 
 # COMMAND ----------
@@ -42,7 +42,7 @@ print(f"Fonte da Gold: {SOURCE}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Mart 1 — indicador por município (grão: ano + id_municipio + rede)
+# MAGIC ## Mart 1 - indicador por município (grão: ano + id_municipio + rede)
 # MAGIC O mart consome exclusivamente registros no grão municipal da Silver aprovada.
 
 # COMMAND ----------
@@ -85,7 +85,7 @@ GROUP BY
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Mart 2 — resumo por UF (grão: ano + sigla_uf + rede)
+# MAGIC ## Mart 2 - resumo por UF (grão: ano + sigla_uf + rede)
 # MAGIC Construído sobre o dado OFICIAL do INEP (grão UF), enriquecido com o
 # MAGIC agregado de alunos integrado na Silver.
 
@@ -126,9 +126,9 @@ GROUP BY
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Mart 3 — meta versus resultado (grão: ano + território + rede)
+# MAGIC ## Mart 3 - meta versus resultado (grão: ano + território + rede)
 # MAGIC As metas já foram integradas na Silver (notebook 03) via join com
-# MAGIC `bronze.meta_uf` / `bronze.meta_municipio` — a Gold **não lê a Bronze**.
+# MAGIC `bronze.meta_uf` / `bronze.meta_municipio` - a Gold **não lê a Bronze**.
 # MAGIC O mart cobre os dois grãos, mas expõe `nivel_territorial` explicitamente.
 # MAGIC Toda consulta agregada deve filtrar `nivel_territorial` para não somar
 # MAGIC UF e município na mesma análise.
@@ -187,7 +187,7 @@ FROM base
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Mart 4 — evolução temporal (grão: ano + território + rede)
+# MAGIC ## Mart 4 - evolução temporal (grão: ano + território + rede)
 # MAGIC Variação da taxa ano a ano. Cobre o grão UF (série histórica oficial do
 # MAGIC INEP) e o grão município (eventos + dado municipal oficial quando houver).
 
@@ -283,7 +283,7 @@ spark.sql(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #Mart 5 — base de modelagem no grão de aluno
+# MAGIC #Mart 5 - base de modelagem no grão de aluno
 
 # COMMAND ----------
 
@@ -377,7 +377,7 @@ if record_ids_gold != rows_gold_alunos:
 if targets_gold != rows_gold_alunos:
     raise RuntimeError("Mart 5 possui target fora do domínio 0/1.")
 
-print("\n=== MART 5 — BASE MODELAGEM ALUNO ===")
+print("\n=== MART 5 - BASE MODELAGEM ALUNO ===")
 print(f"✓ Silver aprovada: {rows_silver_alunos:,}")
 print(f"✓ Gold alunos: {rows_gold_alunos:,}")
 print(f"✓ Target oficial válido: {targets_gold:,}")
@@ -443,4 +443,10 @@ for mart in ["meta_vs_resultado", "evolucao_temporal"]:
 print(
     "Gold publicada com 5 marts, grão documentado, nível territorial explícito "
     "nos marts mistos e origem oficial identificada."
+)
+
+# COMMAND ----------
+
+dbutils.notebook.exit(
+    f"Gold publicada: base_modelagem_aluno={rows_gold_alunos:,} linhas, 5 marts"
 )

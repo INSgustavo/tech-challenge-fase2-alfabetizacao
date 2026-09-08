@@ -7,7 +7,7 @@
 # ]
 # ///
 # MAGIC %md
-# MAGIC # 05 — Serving MongoDB
+# MAGIC # 05 Serving MongoDB
 # MAGIC Publica a Gold no MongoDB Atlas com **upsert** por município (um documento
 # MAGIC por `ano + id_municipio + rede`), sem apagar a coleção inteira.
 # MAGIC
@@ -79,7 +79,7 @@ except Exception as exc:
 # COMMAND ----------
 
 def make_writer(mongo_uri, database, collection):
-    """Fábrica de função de partição — captura a URI por closure (serializável)."""
+    """Fábrica de função de partição - captura a URI por closure (serializável)."""
     def write_partition(rows):
         from pymongo import MongoClient, UpdateOne
 
@@ -122,3 +122,10 @@ if MONGO_URI:
     print(exemplo)
 else:
     print(f"Serving não executado. Fonte pronta: {SOURCE}")
+
+# COMMAND ----------
+
+if MONGO_URI:
+    dbutils.notebook.exit(f"MongoDB: {n_docs:,} documentos publicados")
+else:
+    dbutils.notebook.exit("Serving pulado: secret alfabetizacao/mongo_uri ausente")

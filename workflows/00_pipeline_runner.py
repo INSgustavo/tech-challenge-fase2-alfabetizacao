@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Runner do pipeline completo
 # MAGIC Chama cada notebook via `dbutils.notebook.run`, na ORDEM REAL de
@@ -25,6 +29,7 @@
 # MAGIC pipeline sobe vazia.
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Detecção do ambiente e lista de etapas
 # MAGIC Acha sozinho a pasta `notebooks/` do projeto (sem ninguém precisar
@@ -32,6 +37,7 @@
 # MAGIC Define também a ordem e as dependências de cada etapa.
 
 # COMMAND ----------
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -75,6 +81,7 @@ PIPELINE = [
 ]
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 2. Checagem de pré-requisitos
 # MAGIC Confere, antes de disparar qualquer notebook, os dois pontos que
@@ -83,6 +90,7 @@ PIPELINE = [
 # MAGIC avisa exatamente o quê, em vez de deixar o pipeline quebrar no meio.
 
 # COMMAND ----------
+
 def checar_pre_requisitos():
     """
     Confere, antes de disparar qualquer notebook, os pontos que mais
@@ -140,12 +148,14 @@ def checar_pre_requisitos():
     print("Pré-requisitos ok: NOTEBOOKS_DIR e TS_ALUNO.csv confirmados.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. Execução de uma etapa
 # MAGIC Roda um notebook via `dbutils.notebook.run` e devolve se deu certo,
 # MAGIC sem deixar a exceção subir e derrubar o runner inteiro de uma vez.
 
 # COMMAND ----------
+
 def run_step(nome, arquivo):
     """Executa um notebook via dbutils.notebook.run e devolve (nome, ok, detalhe)."""
     path = f"{NOTEBOOKS_DIR}/{arquivo}"
@@ -159,6 +169,7 @@ def run_step(nome, arquivo):
         return nome, False, str(e)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 4. Orquestração das etapas
 # MAGIC Respeita as dependências: cada etapa só roda depois que todas as
@@ -167,6 +178,7 @@ def run_step(nome, arquivo):
 # MAGIC paralelo.
 
 # COMMAND ----------
+
 def run_pipeline(steps):
     """
     Executa a pipeline respeitando dependências: cada etapa só roda depois
@@ -175,6 +187,7 @@ def run_pipeline(steps):
     rodam em paralelo.
     """
     concluidos = {}
+    resultados = {}
     pendentes = {nome: (arquivo, deps) for nome, arquivo, deps in steps}
     falhou = False
 
@@ -195,8 +208,9 @@ def run_pipeline(steps):
             }
 
             for future in as_completed(futures):
-                nome, ok, _detalhe = future.result()
+                nome, ok, detalhe = future.result()
                 concluidos[nome] = ok
+                resultados[nome] = detalhe
                 del pendentes[nome]
 
                 if not ok:
@@ -207,25 +221,30 @@ def run_pipeline(steps):
                   "para não deixar etapas seguintes lerem dado incompleto.")
             break
 
-    return concluidos, pendentes
+    return concluidos, pendentes, resultados
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 5. Execução e resumo final
 # MAGIC Roda a checagem, dispara o pipeline inteiro, e imprime o status de
 # MAGIC cada etapa no final (OK, falhou, ou não executada por dependência).
 
 # COMMAND ----------
+
 checar_pre_requisitos()
-concluidos, pendentes = run_pipeline(PIPELINE)
+concluidos, pendentes, resultados = run_pipeline(PIPELINE)
 
 print("\n=== RESUMO DA EXECUÇÃO ===")
 for nome, _arquivo, _deps in PIPELINE:
     if nome in concluidos:
         status = "OK" if concluidos[nome] else "FALHOU"
+        detalhe = resultados.get(nome)
+        linha_detalhe = f" | {detalhe}" if detalhe not in (None, "None") else ""
     else:
         status = "não executado (dependência não satisfeita)"
-    print(f"{nome:20s} {status}")
+        linha_detalhe = ""
+    print(f"{nome:20s} {status}{linha_detalhe}")
 
 falhas = [nome for nome, ok in concluidos.items() if not ok]
 if falhas:
