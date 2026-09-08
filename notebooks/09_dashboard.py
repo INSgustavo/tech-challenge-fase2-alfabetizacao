@@ -1327,6 +1327,7 @@ import json
 import pandas as pd
 from html import escape
 from datetime import datetime, timezone
+from pathlib import Path
 
 T_AVALIACAO_UF = f"{CATALOG}.bronze.avaliacao_alfabetizacao"
 T_AVALIACAO_MUN = f"{CATALOG}.bronze.avaliacao_alfabetizacao_municipio"
@@ -4745,16 +4746,26 @@ html_final = (
     .replace("__SILVER_ALUNOS__", fmt_count(silver_alunos_aprovados))
 )
 
-with open(DASHBOARD_HTML, "w", encoding="utf-8") as f:
-    f.write(html_final)
+dashboard_path = Path(DASHBOARD_HTML)
+dashboard_path.parent.mkdir(parents=True, exist_ok=True)
+dashboard_path.write_text(html_final, encoding="utf-8")
+
+if not dashboard_path.is_file() or dashboard_path.stat().st_size == 0:
+    raise RuntimeError(f"O dashboard não foi gravado corretamente: {DASHBOARD_HTML}")
+
+dashboard_size_kb = dashboard_path.stat().st_size / 1024
+dashboard_link = DASHBOARD_HTML.replace("/Volumes", "dbfs:/Volumes", 1)
 
 print(f"✓ Command Center completo: {DASHBOARD_HTML}")
+print(f"✓ Arquivo HTML validado: {dashboard_size_kb:.1f} KB")
+print(f"→ Abra o artefato publicado: {dashboard_link}")
 print("✓ Fontes, pipeline, território, jornada 2030, desigualdade, municípios,")
 print("  streaming, alunos/743, qualidade, decisão e IA/Fase 3 incluídos.")
 print(f"✓ Gold base_modelagem_aluno: {alunos_gold_count:,} registros.")
 
-displayHTML(html_final)
-
-dbutils.notebook.exit(
-    f"Dashboard publicado: base_modelagem_aluno={alunos_gold_count:,} registros"
+displayHTML(
+    f"<p><strong>Dashboard publicado:</strong> "
+    f"<a href='{dashboard_link}' target='_blank'>{DASHBOARD_HTML}</a> "
+    f"({dashboard_size_kb:.1f} KB)</p>"
 )
+displayHTML(html_final)
