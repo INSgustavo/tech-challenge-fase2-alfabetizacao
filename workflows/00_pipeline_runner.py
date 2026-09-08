@@ -40,6 +40,7 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import uuid
 
 # Detecta sozinho a pasta notebooks/ do projeto, sem ninguém precisar
 # preencher nada. Pega o caminho do próprio runner em execução (que fica em
@@ -54,8 +55,9 @@ try:
         .notebookPath()
         .get()
     )
-    _project_root = Path("/Workspace" + _runner_path).parent.parent
-    NOTEBOOKS_DIR = str(_project_root / "notebooks")
+    _workspace_root = Path(_runner_path).parent.parent
+    NOTEBOOKS_DIR = str(_workspace_root / "notebooks")
+    NOTEBOOKS_FS_DIR = Path("/Workspace" + str(_workspace_root / "notebooks"))
     print(f"NOTEBOOKS_DIR detectado automaticamente: {NOTEBOOKS_DIR}")
 except Exception as exc:
     raise RuntimeError(
@@ -65,6 +67,7 @@ except Exception as exc:
     ) from exc
 
 DEFAULT_TIMEOUT_S = 3600
+RUN_ID = str(uuid.uuid4())
 
 # Cada etapa: (nome_amigavel, arquivo, depende_de)
 PIPELINE = [
@@ -103,8 +106,8 @@ def checar_pre_requisitos():
 
     try:
         arquivos_no_dir = {
-            item.name.rstrip("/").replace(".py", "")
-            for item in dbutils.fs.ls(NOTEBOOKS_DIR)
+            item.name.removesuffix(".py")
+            for item in NOTEBOOKS_FS_DIR.iterdir()
         }
         esperados = {arquivo for _nome, arquivo, _deps in PIPELINE}
         faltando = esperados - arquivos_no_dir
@@ -161,7 +164,11 @@ def run_step(nome, arquivo):
     path = f"{NOTEBOOKS_DIR}/{arquivo}"
     print(f"Iniciando {nome} ({arquivo})...")
     try:
-        resultado = dbutils.notebook.run(path, DEFAULT_TIMEOUT_S)
+        resultado = dbutils.notebook.run(
+            path,
+            DEFAULT_TIMEOUT_S,
+            {"run_id": RUN_ID},
+        )
         print(f"OK {nome} concluído. Retorno: {resultado}")
         return nome, True, resultado
     except Exception as e:
@@ -223,6 +230,32 @@ def run_pipeline(steps):
 
     return concluidos, pendentes, resultados
 
+
+def mostrar_catalogo_final():
+    """Lista as tabelas publicadas e exibe uma amostra segura de cada uma."""
+    print("\n=== TABELAS E DADOS PUBLICADOS ===")
+    for schema in ("bronze", "silver", "gold", "observability"):
+        print(f"\n--- workspace.{schema} ---")
+        tabelas = [
+            row.tableName
+            for row in spark.sql(f"SHOW TABLES IN workspace.{schema}").collect()
+            if not row.isTemporary
+        ]
+
+        if not tabelas:
+            print("Nenhuma tabela publicada.")
+            continue
+
+        for nome_tabela in sorted(tabelas):
+            tabela = f"workspace.{schema}.{nome_tabela}"
+            dados = spark.table(tabela)
+            print(f"\n{tabela}: {dados.count():,} registros")
+            amostra = dados.limit(20)
+            if "display" in globals():
+                display(amostra)
+            else:
+                amostra.show(20, truncate=False)
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -257,3 +290,5 @@ if pendentes:
     print(f"\nPipeline parcialmente completa. Etapas não executadas: {list(pendentes.keys())}")
 else:
     print("\nPipeline completa executada com sucesso, na ordem correta.")
+
+mostrar_catalogo_final()
