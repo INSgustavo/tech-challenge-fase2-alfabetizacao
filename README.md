@@ -732,6 +732,15 @@ de notebooks automaticamente e confere os pré-requisitos antes de rodar.
 
 ## Testes
 
+### Resultado da validação local
+
+Em 08/09/2026, os arquivos Python dos notebooks foram compilados com
+`python -m compileall notebooks` sem erros. A execução completa da pipeline
+não é suportada neste ambiente local: os notebooks dependem do Databricks
+Runtime, `pyspark`, `dbutils` e, no caso do experimento, `mlflow`. A execução
+funcional deve ser feita no workspace Databricks, seguindo a ordem indicada
+acima. O setup local também não substitui a publicação das fontes nos Volumes.
+
 A suíte de testes cobre:
 
 - regra de alfabetização dos 743 pontos;
