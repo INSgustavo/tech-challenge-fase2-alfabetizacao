@@ -68,13 +68,16 @@ registros dos arquivos em `data/raw` e `data/external`, sem a linha de cabeçalh
 | Metas municipais oficiais | **37.344** |
 | Metas por UF | **180** |
 | Metas Brasil | **7** |
+| Microdados `TS_ALUNO.csv` | **37.104** |
 
 As tabelas Silver e Gold são criadas durante a execução e não ficam
 armazenadas no Git. O `TS_ALUNO.csv` está versionado no repositório e é
 publicado automaticamente no Volume pelo `00_setup_ambiente.py`; ainda
 assim, a quantidade de alunos e das tabelas derivadas deve ser lida no
 resultado do próprio run, nunca assumida como uma constante neste README —
-o Quality Gate pode aprovar uma fração diferente a cada execução.
+o Quality Gate pode aprovar uma fração diferente a cada execução. A contagem
+acima é apenas o total atual de registros do arquivo bruto versionado, sem
+representar o volume final das tabelas Silver ou Gold.
 
 Para obter as contagens atuais no Databricks, execute:
 
