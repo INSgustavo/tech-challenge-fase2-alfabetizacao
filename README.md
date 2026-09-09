@@ -737,16 +737,27 @@ feita pelo Workflow ou diretamente no workspace Databricks.
 
 ## Testes
 
-### Resultado da validação local
+### Resultado da execução Databricks
 
-Em 09/09/2026, os arquivos Python dos notebooks foram compilados com
-`python -m compileall notebooks` sem erros. A execução completa da pipeline
-não é suportada neste ambiente local: os notebooks dependem do Databricks
-Runtime, `pyspark`, `dbutils` e, no caso do experimento, `mlflow`. A execução
-funcional deve ser feita no workspace Databricks, seguindo a ordem indicada
-acima. O setup local também não substitui a publicação das fontes nos Volumes.
-Os testes com `pytest` não foram executados porque o pacote não ficou
-disponível no interpretador usado pelo terminal.
+Em 09/09/2026, a sequência `01 → 02 → 03 → 06 → 04` foi executada com
+sucesso no Databricks. O Quality Gate foi aprovado e a Gold foi publicada com
+cinco marts, grão documentado, nível territorial explícito nos marts mistos e
+origem oficial do INEP identificada.
+
+Volumes confirmados nesse run:
+
+| Tabela | Linhas |
+|---|---:|
+| `bronze.alunos` | **37.104** |
+| `gold.indicador_municipio` | **10.584** |
+| `gold.resumo_uf` | **145** |
+| `gold.meta_vs_resultado` | **10.729** |
+| `gold.evolucao_temporal` | **10.729** |
+| `gold.base_modelagem_aluno` | **37.104** |
+
+O `compileall` local dos notebooks também foi validado sem erros. Os volumes
+acima são evidências do run Databricks e podem variar quando as fontes forem
+atualizadas.
 
 A suíte de testes cobre:
 
