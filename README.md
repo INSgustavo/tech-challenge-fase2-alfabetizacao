@@ -728,20 +728,22 @@ Cada notebook tem, na primeira célula, uma explicação em markdown do que
 ele faz e o que precisa ter rodado antes dele — leia antes de executar se
 tiver dúvida.
 
-A mesma ordem está representada no Databricks Workflow (`workflows/job_pipeline.json`)
-e no runner Python (`workflows/00_pipeline_runner.py`), que detecta a pasta
-de notebooks automaticamente e confere os pré-requisitos antes de rodar.
+A mesma ordem está representada no Databricks Workflow
+(`workflows/job_pipeline.json`). A execução funcional dos notebooks deve ser
+feita pelo Workflow ou diretamente no workspace Databricks.
 
 ## Testes
 
 ### Resultado da validação local
 
-Em 08/09/2026, os arquivos Python dos notebooks foram compilados com
+Em 09/09/2026, os arquivos Python dos notebooks foram compilados com
 `python -m compileall notebooks` sem erros. A execução completa da pipeline
 não é suportada neste ambiente local: os notebooks dependem do Databricks
 Runtime, `pyspark`, `dbutils` e, no caso do experimento, `mlflow`. A execução
 funcional deve ser feita no workspace Databricks, seguindo a ordem indicada
 acima. O setup local também não substitui a publicação das fontes nos Volumes.
+Os testes com `pytest` não foram executados porque o pacote não ficou
+disponível no interpretador usado pelo terminal.
 
 A suíte de testes cobre:
 
