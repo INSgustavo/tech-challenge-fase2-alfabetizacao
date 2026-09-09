@@ -560,9 +560,9 @@ possuem **37.344 metas municipais**, **5.571 municípios** e **10.584 registros 
 indicador municipal**. O `00_setup_ambiente.py` cria automaticamente todo o
 catálogo (schemas, Volumes, tabelas de observabilidade), e publica no Volume
 `workspace.bronze.raw_files` as fontes oficiais e o `TS_ALUNO.csv`, ambos já
-versionados em `data/`. O setup não fabrica conteúdo de microdados. O
-`01_bronze_batch.py` exige o `TS_ALUNO.csv` no Volume e falha explicitamente
-se o arquivo estiver ausente ou vazio, evitando uma Bronze incompleta.
+versionados em `data/`. O setup não fabrica conteúdo de microdados: se o
+`TS_ALUNO.csv` não estiver no repositório nem já publicado no Volume, o
+`01_bronze_batch.py` pula a tabela `alunos` com um aviso, em vez de falhar.
 
 Práticas adotadas:
 
