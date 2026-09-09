@@ -222,7 +222,7 @@ flowchart LR
 | Unity Catalog | Governança | Catálogo, schemas, tabelas e Volumes centralizados. |
 | Structured Streaming | Caminho de eventos | Checkpoint, `AvailableNow`, `foreachBatch` e integração com Delta. |
 | Databricks Workflows | Orquestração | DAG explícito, dependências e propagação do `run_id`. |
-| MongoDB Atlas | Serving NoSQL | Camada opcional de consumo para aplicações, com `upsert` por chave de negócio. |
+| MongoDB Atlas | Serving NoSQL | Demonstrativo (sem aplicação externa consumindo hoje); justificativa completa e quando isso mudaria estão na seção "Serving com MongoDB". |
 | MLflow | Experimentação | Registro de parâmetros, métricas, artefatos e model card. |
 | GitHub | Versionamento | Git Flow, branches, PRs e revisão cruzada. |
 
@@ -567,7 +567,13 @@ versionados em `data/`. O setup não fabrica conteúdo de microdados: se o
 Práticas adotadas:
 
 - compute serverless e execução sob demanda;
-- Workflow agendado, porém pausado no ambiente acadêmico;
+- **Workflow agendado, porém pausado por decisão de custo**: o
+  `job_pipeline.json` tem `quartz_cron_expression` configurado para rodar a
+  cada 6 horas (fuso São Paulo), mas com `pause_status: PAUSED`. A estrutura
+  de agendamento está pronta e testada; ela fica desativada de propósito
+  neste ambiente acadêmico (Databricks Free Edition) para não consumir cota
+  de execução com um job de produção rodando 4x ao dia sem necessidade real.
+  Ativar é uma troca de uma linha no JSON;
 - Structured Streaming com `AvailableNow`, evitando infraestrutura 24x7;
 - ausência de `OPTIMIZE` e `ZORDER` prematuros;
 - evitar `toPandas()` em grandes coleções;
@@ -575,7 +581,31 @@ Práticas adotadas:
 - schemas explícitos;
 - métricas de duração e volume persistidas para permitir estimativa de custo.
 
-### Particionamento: decisão explícita por tabela
+### Particionamento: decisão explícita por tabela, com números reais
+
+**Nota sobre a entrega anterior:** o feedback da rodada passada apontou, com
+razão, que a decisão de não particionar era circular — o volume parecia
+pequeno porque as fontes oficiais (indicador municipal, metas oficiais e
+microdados de aluno) ainda não tinham sido carregadas, e a estimativa citada
+era de que os microdados de aluno trariam milhões de linhas. Agora que as
+fontes oficiais estão todas carregadas, os números reais são:
+
+| Fonte | Volume real | Estimativa da rodada anterior |
+|---|---:|---|
+| `meta_municipio` | **37.344** | ~38 mil (bateu) |
+| Indicador municipal oficial | **10.584** | ~24 mil (não bateu) |
+| Microdados de aluno (`gold.base_modelagem_aluno`) | **37.104** | "milhões" (não bateu) |
+
+A diferença nos microdados de aluno não é falta de ingestão: o arquivo
+oficial disponível para o 2º ano do Ensino Fundamental é do **Saeb 2023**,
+que nessa etapa é uma avaliação por **amostra**, não censitária — por isso
+o volume nacional fica na casa de dezenas de milhares, não milhões. Os
+"dois milhões de estudantes" citados pela imprensa em 2024 se referem ao
+**Indicador Criança Alfabetizada / Compromisso Nacional Criança
+Alfabetizada**, uma avaliação diferente, administrada pelos sistemas
+estaduais, cujo microdado individual não estava disponível publicamente até
+esta entrega. Ou seja: com as fontes oficiais reais carregadas, o volume de
+alunos é genuinamente pequeno — não é mais uma suposição não verificada.
 
 Nem toda tabela da Gold tem o mesmo volume, então a decisão de particionar foi
 avaliada tabela a tabela, não por uma regra genérica de "tabela pequena não
@@ -591,9 +621,10 @@ particiona":
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
 uma API filtrando por UF), particionar por `ano` ou `sigla_uf` passa a
-compensar. Hoje, para carga completa, o particionamento é dispensável, não
-por o volume ser pequeno, mas porque o padrão de acesso não seleciona um
-subconjunto dos dados.
+compensar. Se um dia o microdado censitário (o do CNCA, com volume na casa
+de milhões) for disponibilizado publicamente e substituir a base atual, essa
+decisão precisa ser reavaliada do zero — o raciocínio acima vale para o
+volume real de hoje, não é uma garantia permanente.
 
 > As contagens acima representam a última execução validada. Uma nova execução
 > pode alterá-las quando novas fontes oficiais ou novos microdados forem
