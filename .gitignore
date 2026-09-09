@@ -17,7 +17,11 @@ checkpoints/
 *.parquet
 *.delta
 data/source/microdados_inep/
-data/raw/microdados_inep/
+# TS_ALUNO.csv (data/raw/microdados_inep/) É versionado de propósito -
+# ~9MB, cabe sem LFS. Ver README/data/raw/README.md antes de mudar isso:
+# sem ele, cada pessoa do grupo precisaria de upload manual no Volume.
+# Se um microdado futuro for grande demais pra Git puro, use Git LFS em
+# vez de reintroduzir esse ignore.
 
 # Secrets and local configs
 .env.*
