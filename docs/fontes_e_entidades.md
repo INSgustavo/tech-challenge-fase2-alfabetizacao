@@ -89,27 +89,27 @@ Meta municipal não herda meta de UF como fallback.
 
 ## 4. INEP - Microdados de alunos
 
-**Arquivo oficial:** `microdados_inep/DADOS/TS_ALUNO.csv`  
-**Destino:** `workspace.bronze.alunos`  
-**Grão:** aluno  
-**Volume validado:** **2.120.560 registros**
+**Arquivo oficial:** `microdados_inep/DADOS/TS_ALUNO.csv` (Saeb 2023, 2º ano EF — edição mais recente publicada; o resto do pipeline usa 2024)
+**Destino:** `workspace.bronze.alunos`
+**Grão:** aluno
+**Volume:** varia por execução — ver output do `08_monitoring.py`, não é constante
 
-Campos relevantes:
+Campos relevantes (schema real, conferido no cabeçalho do arquivo — o
+schema abaixo já substituiu uma versão anterior baseada em suposição, não
+no arquivo real):
 
-- `NU_ANO_AVALIACAO`
-- `CO_UF`
-- `SG_UF`
+- `ID_SAEB` (ano de aplicação)
+- `ID_UF` (código numérico IBGE — traduzido pra sigla via `bronze.uf`)
 - `ID_ALUNO`
-- `TP_SERIE`
+- `ID_SERIE`
 - `ID_ESCOLA`
-- `TP_DEPENDENCIA`
-- `CO_MUNICIPIO`
-- `NO_MUNICIPIO`
+- `IN_PUBLICA` (só público/privado, sem dependência administrativa granular)
+- `ID_MUNICIPIO` (mascarado/anonimizado — não é o código real do IBGE, não usado pra join territorial)
 - `IN_PRESENCA_LP`
 - `IN_PREENCHIMENTO_LP`
-- `CO_CADERNO_LP`
-- `VL_PESO_ALUNO_LP`
-- `VL_PROFICIENCIA_LP`
+- `ID_CADERNO_LP`
+- `PESO_ALUNO_LP`
+- `PROFICIENCIA_LP_SAEB` (escala 0-1000, é a usada no corte de 743 — não confundir com `PROFICIENCIA_LP`, z-score padronizado)
 - `IN_ALFABETIZADO`
 
 A regra de referência do projeto é:
@@ -255,7 +255,7 @@ Microdados oficiais INEP (TS_ALUNO)
 
 Os marts que combinam níveis territoriais preservam o nível/grão para evitar mistura indevida entre UF e município.
 
-`gold.base_modelagem_aluno` foi validada com **2.120.560 registros**, todos identificados como `oficial_inep`, preservando o grão individual.
+`gold.base_modelagem_aluno` é publicada com os registros identificados como `oficial_inep` que passarem no Quality Gate, preservando o grão individual — a contagem exata varia por execução (ver `08_monitoring.py`).
 
 ---
 
@@ -275,16 +275,12 @@ workspace.silver.alunos_modelagem_aprovados
 workspace.gold.base_modelagem_aluno
 ```
 
-Volumes validados:
-
-```text
-Bronze alunos:                    2.120.560
-Silver alunos:                    2.120.560
-Silver alunos aprovados:          2.120.560
-Gold base_modelagem_aluno:        2.120.560
-Quality Gate alunos - cobertura:  100%
-Quality Gate alunos - rejeitados: 0
-```
+Os volumes de cada etapa variam por execução — confira no output do
+`08_monitoring.py` ou rodando a query de contagem do README raiz. Não trate
+nenhum número fixo de linhas como constante deste projeto: já houve uma
+versão anterior deste documento com "2.120.560" registros que nunca foi de
+fato validada contra o microdado real (o manifest de fontes da época
+registrava `alunos.status: pendente_microdados_oficiais`).
 
 O target preparado para a classificação é `alfabetizado_oficial`.
 

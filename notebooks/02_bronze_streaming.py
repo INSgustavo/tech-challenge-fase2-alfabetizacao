@@ -4,16 +4,27 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 02 - Bronze Streaming (P3)
-# MAGIC Replay de registros OFICIAIS da Bronze municipal em JSON + consumer
-# MAGIC Structured Streaming com `AvailableNow`.
+# MAGIC # 02 · Bronze Streaming
+# MAGIC
+# MAGIC **Pra que serve:** demonstra o caminho de streaming do pipeline. Ele
+# MAGIC pega os dados municipais oficiais que já estão na Bronze e "reproduz"
+# MAGIC eles como se fossem eventos chegando em tempo real (arquivos JSON),
+# MAGIC depois consome esses eventos com Spark Structured Streaming.
+# MAGIC
+# MAGIC **Pré-requisito:** `01_bronze_batch` já ter rodado (ele lê
+# MAGIC `bronze.avaliacao_alfabetizacao_municipio`).
+# MAGIC
+# MAGIC **O que ele cria:** a tabela `bronze.eventos_streaming`, com
+# MAGIC deduplicação por `event_id` e MERGE idempotente (rodar de novo não
+# MAGIC duplica dado).
 # MAGIC
 # MAGIC O notebook preserva a estratégia original:
 # MAGIC - contrato explícito;
 # MAGIC - quarentena;
 # MAGIC - deduplicação por `event_id`;
 # MAGIC - MERGE idempotente;
-# MAGIC - `AvailableNow` por decisão de FinOps.
+# MAGIC - `AvailableNow` por decisão de FinOps (processa o que tem disponível e
+# MAGIC   termina sozinho — não fica rodando pra sempre).
 # MAGIC
 # MAGIC **Correção da Fase 2:** os eventos válidos não possuem mais taxa inventada.
 # MAGIC Eles são construídos a partir de `workspace.bronze.avaliacao_alfabetizacao_municipio`.

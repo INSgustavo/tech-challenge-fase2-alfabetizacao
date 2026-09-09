@@ -175,40 +175,47 @@ Também recebe os metadados técnicos de ingestão da Bronze.
 
 ## 2.8 `workspace.bronze.alunos`
 
-**Descrição:** microdados oficiais da Avaliação da Alfabetização 2024.
+**Descrição:** microdados oficiais da Avaliação da Alfabetização (Saeb) 2023, 2º ano do Ensino Fundamental — edição mais recente publicada pelo INEP até esta entrega; o restante do pipeline (metas, indicador municipal) usa 2024.
 
-**Origem:** INEP, arquivo `microdados_inep/DADOS/TS_ALUNO.csv`  
-**Grão:** um registro por aluno na fonte  
-**Volume validado:** **2.120.560 registros**
+**Origem:** INEP, arquivo `microdados_inep/DADOS/TS_ALUNO.csv`
+**Grão:** um registro por aluno na fonte
+**Volume:** varia por execução — ver output do `08_monitoring.py`, não é constante
 
-A Bronze preserva os nomes originais do arquivo oficial.
+A Bronze preserva os nomes originais do arquivo oficial (todos como
+string, incluindo os numéricos — conversão de tipo é responsabilidade da
+Silver).
 
 | Campo | Tipo Bronze | Descrição |
 |---|---|---|
-| `NU_ANO_AVALIACAO` | int | Ano da avaliação. |
-| `CO_UF` | int | Código numérico da UF. |
-| `SG_UF` | string | Sigla da UF. |
+| `ID_SAEB` | string | Ano de aplicação do Saeb. |
+| `ID_UF` | string | Código numérico IBGE da UF (não é a sigla — traduzido via `bronze.uf` na Silver). |
 | `ID_ALUNO` | string | Identificador do aluno na fonte. |
-| `TP_SERIE` | string | Série/tipo de série informado na fonte. |
+| `ID_SERIE` | string | Série avaliada. |
 | `ID_ESCOLA` | string | Identificador da escola. |
-| `TP_DEPENDENCIA` | int | Dependência administrativa da escola. |
-| `CO_MUNICIPIO` | string | Código do município. |
-| `NO_MUNICIPIO` | string | Nome do município. |
-| `IN_PRESENCA_LP` | int | Indicador de presença em Língua Portuguesa. |
-| `IN_PREENCHIMENTO_LP` | int | Indicador de preenchimento da avaliação de LP. |
-| `CO_CADERNO_LP` | string | Código do caderno de Língua Portuguesa. |
-| `VL_PESO_ALUNO_LP` | string | Peso do aluno na fonte; preservado como texto na Bronze. |
-| `VL_PROFICIENCIA_LP` | string | Proficiência de Língua Portuguesa; preservada como texto na Bronze. |
-| `IN_ALFABETIZADO` | int | Indicador oficial de alfabetização disponível na fonte. |
+| `IN_PUBLICA` | string | Indicador público/privado — não distingue estadual/municipal/federal. |
+| `ID_MUNICIPIO` | string | Identificador de município mascarado/anonimizado na fonte — não corresponde ao código real do IBGE, não usar para join territorial. |
+| `IN_PRESENCA_LP` | string | Indicador de presença em Língua Portuguesa. |
+| `IN_PREENCHIMENTO_LP` | string | Indicador de preenchimento da avaliação de LP. |
+| `ID_CADERNO_LP` | string | Código do caderno de Língua Portuguesa. |
+| `PESO_ALUNO_LP` | string | Peso do aluno na fonte. |
+| `PROFICIENCIA_LP` | string | Proficiência em Língua Portuguesa na escala **padronizada** (z-score, média 0, desvio 1) — NÃO é a escala do corte de 743. |
+| `PROFICIENCIA_LP_SAEB` | string | Proficiência em Língua Portuguesa na escala Saeb (0-1000) — esta é a escala do corte de 743. |
+| `IN_ALFABETIZADO` | string | Indicador oficial de alfabetização já calculado na fonte (`PROFICIENCIA_LP_SAEB >= 743`). |
 | `ingestion_timestamp` | timestamp | Momento da ingestão. |
 | `source_file` | string | Arquivo de origem. |
 | `source_system` | string | Identificação da fonte INEP. |
 | `pipeline_run_id` | string | Identificador da execução. |
 | `schema_version` | string | Versão do schema. |
 
+> O schema acima é o real, conferido diretamente no cabeçalho do arquivo
+> oficial. Uma versão anterior deste dicionário descrevia um schema
+> diferente (`NU_ANO_AVALIACAO`, `SG_UF`, `TP_DEPENDENCIA`,
+> `VL_PROFICIENCIA_LP`...) que nunca foi validado contra o arquivo real —
+> era uma suposição feita antes do microdado estar disponível.
+
 ### Regra dos 743 pontos
 
-Na transformação, `VL_PROFICIENCIA_LP` é convertido para `double`.
+Na transformação, `PROFICIENCIA_LP_SAEB` é convertido para `double` e vira `proficiencia_portugues` na Silver.
 
 A regra utilizada pelo projeto é:
 
@@ -313,13 +320,13 @@ Se a meta específica não existir, `meta_taxa` permanece `NULL`.
 
 ### Enriquecimento derivado dos microdados
 
-Os 2.120.560 registros de alunos são agregados antes do join com a Silver.
+Os registros de alunos (grão individual) são agregados antes do join com a Silver.
 
 **Grão da agregação:** `ano + sigla_uf + rede`
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `alunos_proficiencia_media` | double | Média de `VL_PROFICIENCIA_LP` convertida para número. |
+| `alunos_proficiencia_media` | double | Média de `PROFICIENCIA_LP_SAEB` convertida para número. |
 | `alunos_pct_alfabetizados` | double | Fração de alunos com proficiência `>= 743`. |
 | `alunos_amostra` | long | Quantidade de alunos válidos usada na agregação. |
 
@@ -358,7 +365,7 @@ A publicação ocorre somente depois de:
 **Descrição:** Silver oficial no grão individual de aluno, criada a partir de `workspace.bronze.alunos` para preservar a base necessária à modelagem supervisionada da Fase 3.
 
 **Grão:** 1 linha = 1 aluno  
-**Volume reconciliado:** 2.120.560 registros
+**Volume reconciliado:** varia por execução — ver output do `08_monitoring.py`
 
 | Campo | Tipo lógico | Descrição |
 |---|---|---|
@@ -393,9 +400,9 @@ A publicação ocorre somente depois de:
 Validações de reconciliação executadas:
 
 ```text
-Bronze alunos:              2.120.560
-Silver alunos:              2.120.560
-Target oficial válido 0/1:  2.120.560
+Bronze alunos:              <varia por execução>
+Silver alunos:              <varia por execução>
+Target oficial válido 0/1:  <varia por execução>
 Proficiência disponível:    1.851.852
 ```
 
@@ -405,7 +412,7 @@ Proficiência disponível:    1.851.852
 
 **Descrição:** versão de `silver.alunos_modelagem` liberada pelo Quality Gate específico de alunos e única fonte da Gold de modelagem.
 
-**Volume validado:** 2.120.560 registros  
+**Volume:** varia por execução — ver output do `08_monitoring.py`  
 **Registros rejeitados:** 0  
 **Cobertura validada:** 100%
 
@@ -537,8 +544,8 @@ cobertura_alunos_min_80%
 
 **Grão:** 1 linha = 1 aluno
 
-**Volume validado:** 2.120.560 registros  
-**Origem:** 2.120.560 registros de `workspace.silver.alunos_modelagem_aprovados`  
+**Volume:** varia por execução — ver output do `08_monitoring.py`  
+**Origem:** registros aprovados de `workspace.silver.alunos_modelagem_aprovados`  
 **Fonte:** 100% oficial INEP
 
 Esta tabela é a base Gold preparada para a classificação supervisionada da Fase 3.
@@ -585,7 +592,7 @@ Esta tabela é a base Gold preparada para a classificação supervisionada da Fa
 | 3 | municipal |
 | 5 | privada |
 
-Nos microdados oficiais, `TP_DEPENDENCIA = 4` é mapeado para `rede = 5` para compatibilidade com o domínio já utilizado pelo projeto.
+Nos microdados oficiais, `IN_PUBLICA` (público/privado) é mapeado pra `rede`: `IN_PUBLICA = 1` vira `rede = 0` (público agregado), qualquer outro valor vira `rede = 5` (privada). A coluna continua se chamando `tp_dependencia` por compatibilidade com o `04_gold.py`, mas agora carrega esse valor mais grosseiro, não a dependência administrativa granular (estadual/municipal/federal/privada) que o nome sugere.
 
 Esse de-para deve permanecer rastreável à documentação oficial utilizada pelo grupo.
 
@@ -651,7 +658,7 @@ Execução validada:
 
 ```text
 Cobertura alunos: 100%
-Silver alunos aprovada: 2.120.560 registros
+Silver alunos aprovada: <varia por execução>
 Reprovados: 0
 ```
 
@@ -687,7 +694,7 @@ workspace.silver.alunos_modelagem_aprovados
 workspace.gold.base_modelagem_aluno
 ```
 
-**Volume final da Gold de modelagem:** 2.120.560 registros oficiais.
+**Volume final da Gold de modelagem:** varia por execução — ver output do `08_monitoring.py`.
 
 Target preparado:
 
@@ -706,7 +713,7 @@ Pontos críticos para a modelagem:
 
 # 9. Pendências controladas
 
-- validar e manter evidência documental do de-para oficial de `TP_DEPENDENCIA` / `rede`;
+- validar e manter evidência documental do de-para de `IN_PUBLICA` / `rede` (ver nota sobre `tp_dependencia` na seção 2.8);
 - manter rastreabilidade da regra dos 743 pontos;
 - manter o contrato da base de modelagem sincronizado com qualquer nova feature incluída na Fase 3;
 - versionar qualquer nova variável socioeconômica ou educacional incluída no modelo.

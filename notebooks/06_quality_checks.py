@@ -4,8 +4,19 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 06 - Quality Gate
-# MAGIC Valida a Silver **antes** da publicação da Gold (contrato, seção 8).
+# MAGIC # 06 · Quality Gate
+# MAGIC
+# MAGIC **Pra que serve:** é o "fiscal" do pipeline. Confere se os dados da
+# MAGIC Silver são confiáveis o suficiente pra virar Gold. Se não forem, ele
+# MAGIC **bloqueia** a Gold de propósito — isso é o comportamento correto, não
+# MAGIC é bug.
+# MAGIC
+# MAGIC **Pré-requisito:** `03_silver.py` já ter rodado.
+# MAGIC
+# MAGIC **Se ele reprovar** (mensagem tipo "Quality Gate reprovado" /
+# MAGIC "cobertura mínima"): olhe a tabela de quarentena
+# MAGIC (`observability.quarantine_records`) pra ver o motivo exato de cada
+# MAGIC linha rejeitada, com a coluna `rejection_reason`.
 # MAGIC
 # MAGIC O que este notebook faz:
 # MAGIC 1. Valida **integridade referencial** contra as dimensões (`bronze.municipio`
@@ -394,7 +405,7 @@ DIM_MUN_ALUNOS = f"{CATALOG}.bronze.municipio"
 DIM_UF_ALUNOS = f"{CATALOG}.bronze.uf"
 
 COBERTURA_MIN_ALUNOS = 0.80
-ANOS_VALIDOS_ALUNOS = [2024]
+ANOS_VALIDOS_ALUNOS = [2023, 2024]
 
 UFS_VALIDAS_ALUNOS = [
     "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
@@ -425,28 +436,11 @@ print(f"Silver alunos lida: {rows_read_alunos:,} registros")
 
 # COMMAND ----------
 
-# Integridade referencial municipal.
-
-ids_municipios_validos = (
-    spark.table(DIM_MUN_ALUNOS)
-    .select(
-        F.lpad(
-            F.col("id_municipio").cast("string"),
-            7,
-            "0"
-        ).alias("id_municipio")
-    )
-    .distinct()
-    .withColumn("_fk_municipio_ok", F.lit(True))
-)
-
-alunos_qg = alunos_qg.join(
-    ids_municipios_validos,
-    on="id_municipio",
-    how="left"
-)
-
 # Integridade referencial de UF.
+# (município NÃO é checado contra a dimensão: o TS_ALUNO oficial traz
+# id_municipio anonimizado/mascarado - proteção LGPD nos microdados
+# individuais - e nunca vai bater com o código real do IBGE. UF continua
+# confiável e é a única geografia checada nesse nível.)
 
 ufs_validas_dim = (
     spark.table(DIM_UF_ALUNOS)
@@ -501,18 +495,8 @@ rejection_reason_aluno = (
     )
 
     .when(
-        F.col("_fk_municipio_ok").isNull(),
-        F.lit("municipio_inexistente_na_dimensao")
-    )
-
-    .when(
         F.col("_fk_uf_ok").isNull(),
         F.lit("uf_inexistente_na_dimensao")
-    )
-
-    .when(
-        F.col("uf_consistente") == False,
-        F.lit("uf_incompativel_com_municipio")
     )
 
     .when(

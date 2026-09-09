@@ -4,8 +4,14 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 04 Gold
-# MAGIC Cria os marts analíticos após aprovação do Quality Gate (notebook 06).
+# MAGIC # 04 · Gold
+# MAGIC
+# MAGIC **Pra que serve:** cria as tabelas finais, prontas pra análise/consumo
+# MAGIC (dashboards, ML, apps) — os "marts" analíticos.
+# MAGIC
+# MAGIC **Pré-requisito:** `06_quality_checks` já ter rodado e **aprovado** os
+# MAGIC dados (esse notebook só lê da Silver aprovada, nunca da Bronze
+# MAGIC diretamente nem da Silver sem aprovação).
 # MAGIC
 # MAGIC **A Gold lê exclusivamente da Silver aprovada** (arquitetura Medalhão:
 # MAGIC nenhuma leitura direta da Bronze). Metas e dimensões já chegam integradas
@@ -19,6 +25,8 @@
 # MAGIC    `nivel_territorial` explícito (`uf` | `municipio`)
 # MAGIC 4. `gold.evolucao_temporal` - grão: `ano + território + rede`, com
 # MAGIC    `nivel_territorial` explícito (`uf` | `municipio`)
+# MAGIC 5. `gold.base_modelagem_aluno` - grão de aluno, é a base de partida
+# MAGIC    pra Fase 3
 
 # COMMAND ----------
 

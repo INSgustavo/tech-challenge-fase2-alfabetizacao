@@ -4,12 +4,25 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 09: Command Center da Alfabetização
+# MAGIC # 09 · Command Center da Alfabetização
+# MAGIC
+# MAGIC **Pra que serve:** é o dashboard executivo final — o que dá pra mostrar
+# MAGIC pra alguém que não conhece o projeto e ainda assim entender os
+# MAGIC resultados. Roda inteiro dentro do notebook, gera um HTML com
+# MAGIC gráficos e filtros.
+# MAGIC
+# MAGIC **Pré-requisito:** `04_gold.py` já ter rodado (lê só da camada Gold).
+# MAGIC
+# MAGIC **Como ver o resultado:** rode todas as células e abra este notebook
+# MAGIC diretamente no Databricks — o HTML completo só aparece rodando aqui
+# MAGIC dentro, não em outro lugar.
+# MAGIC
 # MAGIC Dashboard executivo em HTML/CSS/JS construído a partir da camada Gold,
 # MAGIC com filtros de ano, rede e UF aplicados no navegador, sem nova consulta
 # MAGIC ao Databricks a cada troca.
 
 # COMMAND ----------
+
 from datetime import datetime, timezone
 from string import Template
 
@@ -26,7 +39,7 @@ T_META_RESULTADO = f"{CATALOG}.gold.meta_vs_resultado"
 T_EVOLUCAO = f"{CATALOG}.gold.evolucao_temporal"
 T_META_BRASIL = f"{CATALOG}.bronze.meta_brasil"
 T_META_UF = f"{CATALOG}.bronze.meta_uf"
-T_ALUNOS = f"{CATALOG}.bronze.alunos"
+T_ALUNOS = f"{CATALOG}.silver.alunos_modelagem"
 T_EVENTOS = f"{CATALOG}.bronze.eventos_streaming"
 T_METRICAS = f"{CATALOG}.observability.pipeline_metrics"
 T_QUARENTENA = f"{CATALOG}.observability.quarantine_records"
@@ -49,6 +62,7 @@ print("ℹ  Gerando dashboard HTML completo...")
 # dbutils.notebook.exit("OK")  # Comentado para gerar HTML completo
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 1. Modo headless
 # MAGIC Detecta se o notebook está rodando via dbutils.notebook.run (dentro do
@@ -70,6 +84,7 @@ except:
 print(f"Modo de execução: {'HEADLESS (via pipeline)' if HEADLESS_MODE else 'INTERATIVO'}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 2. Funções auxiliares
 # MAGIC Helpers de formatação e verificação de tabela usados no resto do notebook.
@@ -148,6 +163,7 @@ print(f"  - {T_IND_MUN}: {indicador_municipio.count()} registros")
 print(f"  - {T_META_RESULTADO}: {meta_vs_resultado.count()} registros")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 3. Anos disponíveis
 # MAGIC Lê os anos reais presentes em gold.resumo_uf, em vez de anos fixos no
@@ -212,6 +228,7 @@ rede_codes = REDE_CODES[REDE_SELECIONADA]
 print(f"Filtros ativos: ano={ANO} | rede={REDE_SELECIONADA} | UF={UF_SELECIONADA}")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 4. Dimensão territorial
 # MAGIC Mapa de UF para região, independente de variações de schema da fonte.
@@ -269,6 +286,7 @@ else:
     )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 5. Metas normalizadas
 # MAGIC Identifica defensivamente a coluna numérica de meta em cada fonte oficial.
@@ -357,6 +375,7 @@ ranking_ufs = (
 )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 6. KPIs educacionais e municipais
 # MAGIC Calcula os indicadores agregados usados nos cartões de resumo da visão
@@ -413,6 +432,7 @@ municipios_monitorados = municipal_stats["municipios_monitorados"] or 0
 pct_municipios_meta = municipal_stats["pct_municipios_meta"]
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 7. Ranking territorial
 # MAGIC Tabela completa de UFs ordenada por resultado, pronta para exibição.
@@ -433,6 +453,7 @@ ranking_dashboard = ranking_ufs.select(
 display(ranking_dashboard)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 8. Matriz de prioridade
 # MAGIC Cruza resultado atual com evolução em relação ao ano anterior.
@@ -457,6 +478,7 @@ matriz_prioridade = (
 display(matriz_prioridade)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 9. Trajetória histórica
 # MAGIC Série de resultado observado ao longo dos anos, para comparar com a meta.
@@ -490,6 +512,7 @@ trajetoria_2030 = resultado_historico.unionByName(meta_historica).orderBy("ano",
 display(trajetoria_2030)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 10. Desigualdade regional
 # MAGIC Compara resultado por região entre rede pública e privada.
@@ -562,6 +585,7 @@ desigualdade_regional = (
 display(desigualdade_regional)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 11. Municípios prioritários
 # MAGIC Lista os municípios mais distantes da meta, com nome quando disponível.
@@ -701,6 +725,7 @@ municipios_prioritarios = (
 display(municipios_prioritarios)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 12. Pulso do streaming
 # MAGIC Volume de eventos e latência de ingestão por janela de hora.
@@ -752,6 +777,7 @@ else:
     print("⚠ bronze.eventos_streaming ainda não existe. Execute o notebook 02.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 13. Distribuição de alunos e corte de 743 pontos
 # MAGIC Classifica os alunos por faixa de proficiência usando a regra oficial.
@@ -864,6 +890,7 @@ else:
     print("⚠ bronze.alunos ainda não existe. A visão de 743 pontos ficará indisponível.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 14. Saúde operacional do pipeline
 # MAGIC Métricas das últimas execuções: duração, linhas lidas, gravadas e rejeitadas.
@@ -924,6 +951,7 @@ else:
     print("⚠ observability.pipeline_metrics ainda não existe. Execute o notebook 08.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 15. Painel de decisão
 # MAGIC Traduz o status de cada UF em uma recomendação de ação.
@@ -956,6 +984,7 @@ action_board = (
 display(action_board)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 16. Paleta e helpers de gráficos SVG
 # MAGIC Cores e funções reutilizáveis para montar os gráficos nativos a seguir.
@@ -1040,6 +1069,7 @@ def donut(pct: float | None, label: str, color: str) -> str:
     )
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 17. Gráfico 1: donuts de progresso
 # MAGIC Progresso geral e ranking com marcador de meta, renderizado via displayHTML.
@@ -1097,6 +1127,7 @@ ranking_chart_html = chart_box(
 displayHTML(ranking_chart_html)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 18. Gráfico 2: trajetória até 2030
 
@@ -1131,6 +1162,7 @@ trajetoria_chart_html = chart_box(
 displayHTML(trajetoria_chart_html)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 19. Gráfico 3: matriz de prioridade
 
@@ -1185,6 +1217,7 @@ else:
     print("Sem ano anterior no recorte para montar a matriz.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 20. Gráfico 4: distribuição de alunos e corte 743
 
@@ -1240,6 +1273,7 @@ if table_exists(T_ALUNOS):
         displayHTML(alunos_chart_html)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 21. Gráfico 5: pulso do streaming
 
@@ -1278,6 +1312,7 @@ if table_exists(T_EVENTOS):
         displayHTML(streaming_chart_html)
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 22. Inventário de features para IA (Fase 3)
 # MAGIC Lista o que já está disponível na Gold para evoluir para predição na
@@ -1305,6 +1340,7 @@ feature_rows = [
 display(spark.createDataFrame(feature_rows))
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 23. Encerramento da preparação analítica
 # MAGIC Confirma que tudo que o Command Center precisa já está calculado.
@@ -1316,6 +1352,7 @@ print("✓ Filtros, capa, rankings, trajetória, streaming, qualidade e IA prepa
 print("→ Use '+ Add to dashboard' nos resultados que farão parte do vídeo executivo.")
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 24. Setup do Command Center HTML
 # MAGIC Declara as tabelas adicionais usadas só na versão HTML e os helpers de
@@ -1358,6 +1395,7 @@ def fmt_count(value: int) -> str:
 
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 25. Inventário real das fontes
 # MAGIC Origem, arquivo e grão de cada entidade usada no pipeline, sem números
@@ -1514,6 +1552,7 @@ def gold_inventory_html():
 
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 26. Dados leves embarcados no HTML
 # MAGIC Monta os arrays JSON que alimentam os filtros do lado do navegador, sem
@@ -1725,6 +1764,7 @@ FILTER_DATA_JSON = json.dumps(
 
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 27. Tabela de qualidade dos dados
 # MAGIC Gera o HTML da tabela de frescor, completude e rejeições.
@@ -1981,6 +2021,7 @@ pipeline_health_class_value = (
 
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 28. Template HTML/CSS/JS do Command Center
 # MAGIC String única com a página inteira: estilo, marcação de todas as abas e o
@@ -4707,6 +4748,7 @@ window.applyFilters = applyFilters;
 """
 
 # COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## 29. Opções dinâmicas, publicação e exibição
 # MAGIC Gera as opções de UF e ano a partir dos dados reais, substitui os

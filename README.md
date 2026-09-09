@@ -30,12 +30,29 @@ O pipeline atual não depende de dados sintéticos para construir seus indicador
 | Metas Brasil | INEP oficial | Ano | Referência nacional |
 | Metas UF | INEP oficial | Ano + UF | Comparação resultado x meta |
 | Metas município | INEP oficial | Ano + município | Priorização municipal |
-| Microdados `TS_ALUNO.csv`, `TS_ESTADO.csv`, `TS_ITEM.csv` e `TS_MUNICIPIO.csv` | Avaliação da Alfabetização 2024 - INEP | Aluno, estado, item e município | Regra dos 743 pontos, dimensões e agregações |
+| Microdados `TS_ALUNO.csv` | Avaliação da Alfabetização (Saeb) 2023 - INEP, 2º ano do Ensino Fundamental | Aluno | Regra dos 743 pontos e enriquecimento por UF |
 | Estados e municípios | IBGE | UF / município | Enriquecimento territorial |
 
-As planilhas oficiais são preparadas pela lógica que hoje está embutida em `00_setup_ambiente.py` (antes era um script separado, `scripts/gerar_fontes.py`), que preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json` com informações de rastreabilidade e hash.
+As planilhas oficiais e o microdado de alunos são preparados por um script
+próprio, `scripts/gerar_fontes.py`, chamado pelo `00_setup_ambiente.py`
+(não embutido nele — ver seção "Como executar" para o porquê). O script
+preserva a proveniência das fontes e gera `fontes_oficiais_manifest.json`
+com informações de rastreabilidade e hash.
 
 Os antigos dados sintéticos foram retirados do fluxo oficial e mantidos apenas em `data/legacy_fontes_derivadas/` para rastreabilidade histórica.
+
+> **Atenção — duas particularidades do `TS_ALUNO.csv` oficial:**
+> 1. **Ano**: a edição mais recente publicada pelo INEP para o 2º ano do
+>    Ensino Fundamental é a de **2023** (Saeb), não 2024. O restante do
+>    pipeline (metas, indicador municipal) usa 2024, porque são fontes com
+>    calendários de divulgação diferentes do microdado individual — o Saeb
+>    2024 ainda não tinha sido publicado até a data desta entrega.
+> 2. **Município anonimizado**: o campo de município do microdado de aluno
+>    não corresponde ao código real do IBGE (é mascarado, provavelmente por
+>    proteção LGPD nos dados individuais mais recentes do INEP). Por isso, o
+>    pipeline usa apenas a **UF** do aluno como geografia confiável nesse
+>    grão — não tente cruzar `id_municipio` de `silver.alunos_modelagem` com
+>    a dimensão `bronze.municipio`, o join não é válido.
 
 ## Volumes reais das fontes e da execução
 
@@ -53,10 +70,11 @@ registros dos arquivos em `data/raw` e `data/external`, sem a linha de cabeçalh
 | Metas Brasil | **7** |
 
 As tabelas Silver e Gold são criadas durante a execução e não ficam
-armazenadas no Git. O arquivo oficial `TS_ALUNO.csv` também é carregado
-manualmente no Volume do Databricks; por isso, a quantidade de alunos e das
-tabelas derivadas deve ser lida no resultado do próprio run, nunca assumida
-como uma constante neste README.
+armazenadas no Git. O `TS_ALUNO.csv` está versionado no repositório e é
+publicado automaticamente no Volume pelo `00_setup_ambiente.py`; ainda
+assim, a quantidade de alunos e das tabelas derivadas deve ser lida no
+resultado do próprio run, nunca assumida como uma constante neste README —
+o Quality Gate pode aprovar uma fração diferente a cada execução.
 
 Para obter as contagens atuais no Databricks, execute:
 
@@ -536,13 +554,12 @@ GitHub Actions não faz parte da implementação concluída desta fase.
 A decisão de performance usa os volumes das fontes versionadas e as contagens
 produzidas pelo notebook `08_monitoring.py`. Neste checkout, as fontes locais
 possuem **37.344 metas municipais**, **5.571 municípios** e **10.584 registros do
-indicador municipal**. O `00_setup_ambiente.py` cria automaticamente o Volume
-`workspace.bronze.raw_files` e a pasta de destino dos microdados. O arquivo
-O setup procura os arquivos oficiais `TS_ALUNO.csv`, `TS_ESTADO.csv`,
-`TS_ITEM.csv` e `TS_MUNICIPIO.csv` em `data/source/microdados_inep/DADOS/`
-e os publica no Volume. Se os arquivos já estiverem no Volume, eles são
-reconhecidos no próprio destino. O setup não fabrica conteúdo de microdados:
-os arquivos oficiais precisam estar na entrada ou no Volume antes do Bronze.
+indicador municipal**. O `00_setup_ambiente.py` cria automaticamente todo o
+catálogo (schemas, Volumes, tabelas de observabilidade), e publica no Volume
+`workspace.bronze.raw_files` as fontes oficiais e o `TS_ALUNO.csv`, ambos já
+versionados em `data/`. O setup não fabrica conteúdo de microdados: se o
+`TS_ALUNO.csv` não estiver no repositório nem já publicado no Volume, o
+`01_bronze_batch.py` pula a tabela `alunos` com um aviso, em vez de falhar.
 
 Práticas adotadas:
 
@@ -565,8 +582,8 @@ particiona":
 |---|---:|---|---|
 | `gold.resumo_uf` | **145** | Não | Volume pequeno no padrão atual. |
 | `gold.indicador_municipio` | **10.584** | Não | O mart é pequeno no padrão atual. |
-| `bronze.alunos` | **2.120.560** | Não, por decisão consciente | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
-| `gold.base_modelagem_aluno` | **2.120.560** | Não, por decisão consciente | É consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
+| `bronze.alunos` | *variável — veja output da execução* | Não, por decisão consciente | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
+| `gold.base_modelagem_aluno` | *variável — veja output da execução* | Não, por decisão consciente | É consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
@@ -655,35 +672,43 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 
 ### Pré-requisitos
 
-- Databricks Free Edition;
-- acesso ao catálogo `workspace`;
-- planilhas oficiais em `data/source/` e dimensões IBGE em `data/external/`;
+- **Conta/workspace Databricks própria** (a versão gratuita "Community
+  Edition" serve, não precisa pagar nada). **Cada pessoa do grupo precisa
+  da própria conta** — não dá pra usar o workspace de outra pessoa do
+  grupo, isso consome os créditos dela;
+- clonar este repositório do GitHub direto no workspace (Databricks Repos
+  ou equivalente);
 - MongoDB Atlas somente se a etapa de serving for demonstrada;
 - secret `alfabetizacao/mongo_uri` somente para publicação real no MongoDB.
 
-> Atenção, cada pessoa no próprio workspace: clonar este repositório (via
-> Git folder) traz os notebooks e o código, mas não popula o Volume
-> automaticamente. Volumes são armazenamento local de cada workspace Free
-> Edition e não são sincronizados pelo Git. O `00_setup_ambiente.py` já
-> resolve isso sozinho: cria os schemas e o Volume, detecta o caminho do
-> projeto automaticamente (sem precisar preencher nada), e ao final já
-> prepara e copia as fontes oficiais para o Volume.
-
-> Atenção, microdados de aluno (`TS_ALUNO.csv`): esse é o único arquivo que
-> não é gerado automaticamente, é o microdado oficial do INEP, grande demais
-> para derivar por script. Precisa ser baixado da fonte oficial e enviado
-> manualmente por cada pessoa, no próprio workspace, em
-> `/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/TS_ALUNO.csv`
-> (Catalog, workspace, bronze, Volumes, raw_files, Upload to this volume).
-> Sem esse arquivo, `01_bronze_batch.py` falha ao tentar ler um caminho
-> vazio, isso não é bug de código, é arquivo faltando.
+> **O que o `00_setup_ambiente.py` faz sozinho, sem precisar editar nada:**
+> cria os 4 schemas do catálogo (`bronze`, `silver`, `gold`, `observability`),
+> os 4 Volumes usados pelo pipeline, e as 2 tabelas de observabilidade —
+> toda a estrutura do catálogo é criada do zero na primeira execução, em
+> qualquer workspace. Depois disso, ele copia as fontes oficiais e o
+> `TS_ALUNO.csv` (ambos já versionados neste repositório) para uma pasta
+> temporária no disco local do cluster, roda `scripts/gerar_fontes.py` a
+> partir de lá, e publica o resultado no Volume `bronze.raw_files`.
+>
+> **Por que não faz tudo direto no Workspace do Git?** Escrever arquivos
+> dentro de `/Workspace/Repos` (onde o notebook fica quando clonado via
+> Git) se mostrou não confiável nesse ambiente — os arquivos gerados não
+> persistiam. Por isso o setup usa uma pasta local (`/tmp/...`) como área
+> de trabalho e só escreve no destino final (o Volume, que é compartilhado
+> por todo o catálogo) no fim do processo.
+>
+> **Sobre o `TS_ALUNO.csv`**: como já está versionado em
+> `data/raw/microdados_inep/DADOS/TS_ALUNO.csv` neste repositório, ele é
+> publicado automaticamente pelo `00_setup_ambiente.py` — **não precisa
+> mais de upload manual por pessoa**. Se um dia esse arquivo for atualizado
+> (ex.: quando o Saeb 2024 for publicado), é só substituir o arquivo no
+> repositório e rodar o setup de novo.
 
 ### Ordem
 
-1. Execute `00_setup_ambiente.py`. Ele cria os schemas, cria o Volume
-   `bronze.raw_files`, e já prepara e copia as fontes oficiais para dentro
-   dele (a lógica que antes era um script separado, `gerar_fontes.py`, está
-   embutida neste notebook).
+1. Execute `00_setup_ambiente.py`. Ele cria toda a estrutura do catálogo
+   (schemas, Volumes, tabelas de observabilidade) e já prepara e publica
+   todas as fontes oficiais no Volume, incluindo o `TS_ALUNO.csv`.
 2. Execute `01_bronze_batch.py`.
 3. Execute `02_bronze_streaming.py`.
 4. Execute `03_silver.py`.
@@ -693,6 +718,10 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 8. Execute `07_ml_mlflow.py`.
 9. Execute `08_monitoring.py`.
 10. Execute `09_dashboard.py`.
+
+Cada notebook tem, na primeira célula, uma explicação em markdown do que
+ele faz e o que precisa ter rodado antes dele — leia antes de executar se
+tiver dúvida.
 
 A mesma ordem está representada no Databricks Workflow (`workflows/job_pipeline.json`)
 e no runner Python (`workflows/00_pipeline_runner.py`), que detecta a pasta

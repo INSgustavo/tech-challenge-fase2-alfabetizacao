@@ -4,9 +4,26 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 03 Silver canônica
-# MAGIC Normaliza chaves, **integra as seis fontes do edital** e publica o modelo
-# MAGIC canônico:
+# MAGIC # 03 · Silver canônica
+# MAGIC
+# MAGIC **Pra que serve:** junta tudo que está espalhado em tabelas Bronze
+# MAGIC separadas (indicador por UF, indicador por município, metas, dimensões
+# MAGIC territoriais e microdados de aluno) em um modelo único e consistente.
+# MAGIC É aqui que os dados de fontes e grãos diferentes se tornam comparáveis.
+# MAGIC
+# MAGIC **Pré-requisito:** `01_bronze_batch` e `02_bronze_streaming` já terem
+# MAGIC rodado.
+# MAGIC
+# MAGIC **O que ele cria:** `silver.medicoes_alfabetizacao` (UF + município) e
+# MAGIC `silver.alunos_modelagem` (grão de aluno, é a base que vai virar a
+# MAGIC entrada da Fase 3).
+# MAGIC
+# MAGIC **Nota sobre o microdado de aluno:** o `id_municipio` do aluno vem
+# MAGIC mascarado/anonimizado na fonte oficial — não corresponde ao código real
+# MAGIC do IBGE. Por isso, o enriquecimento territorial do aluno usa só a UF,
+# MAGIC que é confiável.
+# MAGIC
+# MAGIC Integra as seis fontes do edital e publica o modelo canônico:
 # MAGIC 1. medições batch (INEP, grão UF) + streaming (grão município) - fatos;
 # MAGIC 2. `bronze.municipio` e `bronze.uf` - dimensões territoriais (join);
 # MAGIC 3. `bronze.meta_brasil`, `bronze.meta_uf`, `bronze.meta_municipio` - metas
@@ -278,30 +295,51 @@ fatos = fatos.withColumn(
 
 if existe("bronze", "alunos"):
 
+    # ID_UF no arquivo real e o codigo numerico da UF, nao a sigla - precisa
+    # traduzir via bronze.uf (mesma dimensao ja usada no resto do projeto).
+    dim_uf_lookup = (
+        spark.table(tbl("bronze", "uf"))
+        .select(
+            F.col("codigo_uf").cast("int").alias("_codigo_uf"),
+            F.upper(F.trim(F.col("sigla_uf"))).alias("_sigla_uf"),
+        )
+        .dropDuplicates(["_codigo_uf"])
+    )
+
     alunos_canonical = (
         spark.table(tbl("bronze", "alunos"))
+        .withColumn("_id_uf_int", F.col("ID_UF").cast("int"))
+        .join(
+            dim_uf_lookup,
+            F.col("_id_uf_int") == F.col("_codigo_uf"),
+            "left"
+        )
         .select(
-            # ano oficial
-            F.col("NU_ANO_AVALIACAO")
+            # ano oficial (ano de aplicacao do Saeb - arquivo atual e 2023,
+            # diferente do restante do pipeline, que e 2024; documentado no README)
+            F.col("ID_SAEB")
              .cast("int")
              .alias("ano"),
 
-            # UF oficial
-            F.upper(
-                F.trim(F.col("SG_UF"))
-            ).alias("sigla_uf"),
+            # UF oficial (traduzida do codigo numerico)
+            F.col("_sigla_uf").alias("sigla_uf"),
 
-            # compatibilidade com o código de rede usado no projeto
+            # o arquivo real nao tem TP_DEPENDENCIA (estadual/municipal/privada),
+            # so IN_PUBLICA (publico/privado). Perde a granularidade fina de rede
+            # nesse nivel - mapeado pra convencao ja usada no projeto:
+            # 0 = publico (agregado), 5 = privada.
             F.when(
-                F.col("TP_DEPENDENCIA").cast("int") == 4,
-                F.lit(5)
+                F.col("IN_PUBLICA").cast("int") == 1,
+                F.lit(0)
             ).otherwise(
-                F.col("TP_DEPENDENCIA").cast("int")
+                F.lit(5)
             ).alias("rede"),
 
-            # proficiência oficial
+            # proficiência oficial na escala do Saeb (0-1000, usada no corte
+            # de 743) - PROFICIENCIA_LP é o z-score padronizado (média 0,
+            # desvio 1), NÃO essa escala. PROFICIENCIA_LP_SAEB é a certa.
             F.regexp_replace(
-                F.trim(F.col("VL_PROFICIENCIA_LP")),
+                F.trim(F.col("PROFICIENCIA_LP_SAEB")),
                 ",",
                 "."
             )
@@ -550,31 +588,43 @@ print(f"Bronze alunos: {alunos_raw.count():,} registros")
 
 # COMMAND ----------
 
-# Normalização dos campos oficiais do TS_ALUNO.csv.
+# Normalização dos campos oficiais do TS_ALUNO.csv (schema real, conferido
+# diretamente no cabeçalho do arquivo - nao existe TP_DEPENDENCIA nem
+# NO_MUNICIPIO nessa fonte, so ID_UF numerico e IN_PUBLICA).
 # Não agregamos: 1 linha continua representando 1 aluno.
+
+dim_uf_lookup_aluno = (
+    spark.table(tbl("bronze", "uf"))
+    .select(
+        F.col("codigo_uf").cast("int").alias("_codigo_uf"),
+        F.upper(F.trim(F.col("sigla_uf"))).alias("_sigla_uf_lookup"),
+    )
+    .dropDuplicates(["_codigo_uf"])
+)
 
 alunos_base = (
     alunos_raw
 
+    .withColumn("_id_uf_int", F.col("ID_UF").cast("int"))
+    .join(
+        dim_uf_lookup_aluno,
+        F.col("_id_uf_int") == F.col("_codigo_uf"),
+        "left"
+    )
+
     .select(
         F.col("ID_ALUNO").cast("string").alias("id_aluno"),
-        F.col("NU_ANO_AVALIACAO").cast("int").alias("ano"),
+        F.col("ID_SAEB").cast("int").alias("ano"),
 
-        F.upper(
-            F.trim(F.col("SG_UF"))
-        ).alias("sigla_uf"),
+        F.col("_sigla_uf_lookup").alias("sigla_uf"),
 
         F.lpad(
-            F.col("CO_MUNICIPIO").cast("string"),
+            F.col("ID_MUNICIPIO").cast("string"),
             7,
             "0"
         ).alias("id_municipio"),
 
-        F.col("NO_MUNICIPIO")
-         .cast("string")
-         .alias("nome_municipio_fonte"),
-
-        F.col("TP_SERIE")
+        F.col("ID_SERIE")
          .cast("int")
          .alias("serie"),
 
@@ -582,7 +632,12 @@ alunos_base = (
          .cast("string")
          .alias("id_escola"),
 
-        F.col("TP_DEPENDENCIA")
+        # arquivo real nao tem TP_DEPENDENCIA granular (estadual/municipal/
+        # privada) - so IN_PUBLICA (publico/privado). Mantido com o nome
+        # "tp_dependencia" por compatibilidade com o 04_gold.py, mas agora
+        # carrega apenas o valor de IN_PUBLICA (0/1), nao mais o código
+        # granular original de dependência administrativa.
+        F.col("IN_PUBLICA")
          .cast("int")
          .alias("tp_dependencia"),
 
@@ -594,18 +649,20 @@ alunos_base = (
          .cast("int")
          .alias("preenchimento_lp"),
 
-        F.col("CO_CADERNO_LP")
+        F.col("ID_CADERNO_LP")
          .cast("string")
          .alias("caderno_lp"),
 
         F.regexp_replace(
-            F.trim(F.col("VL_PESO_ALUNO_LP").cast("string")),
+            F.trim(F.col("PESO_ALUNO_LP").cast("string")),
             ",",
             "."
         ).cast("double").alias("peso_aluno_lp"),
 
+        # PROFICIENCIA_LP é o z-score padronizado (média 0, desvio 1) - NÃO
+        # é a escala do corte de 743. PROFICIENCIA_LP_SAEB é a escala certa.
         F.regexp_replace(
-            F.trim(F.col("VL_PROFICIENCIA_LP").cast("string")),
+            F.trim(F.col("PROFICIENCIA_LP_SAEB").cast("string")),
             ",",
             "."
         ).cast("double").alias("proficiencia_portugues"),
@@ -615,12 +672,12 @@ alunos_base = (
          .alias("alfabetizado_oficial"),
     )
 
-    # Convenção já utilizada pelo projeto:
-    # TP_DEPENDENCIA 4 = privada -> rede 5.
+    # Convenção já utilizada pelo projeto, adaptada: sem TP_DEPENDENCIA
+    # granular, so publico (IN_PUBLICA=1 -> rede 0) vs privado (rede 5).
     .withColumn(
         "rede",
-        F.when(F.col("tp_dependencia") == 4, F.lit(5))
-         .otherwise(F.col("tp_dependencia"))
+        F.when(F.col("tp_dependencia") == 1, F.lit(0))
+         .otherwise(F.lit(5))
          .cast("int")
     )
 

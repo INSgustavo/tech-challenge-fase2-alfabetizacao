@@ -199,27 +199,29 @@ A tabela `workspace.bronze.alunos` é derivada do arquivo oficial:
 microdados_inep/DADOS/TS_ALUNO.csv
 ```
 
-da Avaliação da Alfabetização 2024 do INEP.
+da Avaliação da Alfabetização (Saeb) 2023 do INEP, 2º ano do Ensino
+Fundamental — edição mais recente disponível; o restante do pipeline
+(metas, indicador municipal) usa 2024, calendário de divulgação diferente.
 
 Campos relevantes da fonte incluem:
 
-- `NU_ANO_AVALIACAO`;
-- `CO_UF`;
-- `SG_UF`;
+- `ID_SAEB` (ano de aplicação);
+- `ID_UF` (código numérico IBGE, traduzido para sigla via `bronze.uf`);
 - `ID_ALUNO`;
-- `TP_SERIE`;
+- `ID_SERIE`;
 - `ID_ESCOLA`;
-- `TP_DEPENDENCIA`;
-- `CO_MUNICIPIO`;
-- `NO_MUNICIPIO`;
+- `IN_PUBLICA` (só distingue público/privado — não há dependência administrativa granular nesse arquivo);
+- `ID_MUNICIPIO` (mascarado/anonimizado — não corresponde ao código real do IBGE, não usado para join territorial);
 - `IN_PRESENCA_LP`;
 - `IN_PREENCHIMENTO_LP`;
-- `CO_CADERNO_LP`;
-- `VL_PESO_ALUNO_LP`;
-- `VL_PROFICIENCIA_LP`;
+- `ID_CADERNO_LP`;
+- `PESO_ALUNO_LP`;
+- `PROFICIENCIA_LP_SAEB` (escala 0-1000, usada no corte de 743 — não confundir com `PROFICIENCIA_LP`, que é z-score padronizado);
 - `IN_ALFABETIZADO`.
 
-A execução validada carregou **2.120.560 registros**.
+A quantidade de registros carregados varia por execução e deve ser lida no
+resultado do próprio run (`08_monitoring.py` ou a query de contagem no
+README raiz) — não é uma constante deste contrato.
 
 Os antigos dados sintéticos permanecem somente em `data/legacy_fontes_derivadas/` para rastreabilidade histórica e não participam do pipeline oficial.
 
@@ -367,7 +369,7 @@ Os marts que misturam níveis territoriais devem preservar o campo de grão ou n
 
 ### Base Gold no grão de aluno
 
-`workspace.gold.base_modelagem_aluno` preserva uma linha por aluno e foi publicada com **2.120.560 registros oficiais** após Quality Gate com **100% de cobertura**.
+`workspace.gold.base_modelagem_aluno` preserva uma linha por aluno e é publicada com os registros oficiais que passarem no Quality Gate — a contagem exata e a cobertura variam por execução (ver `08_monitoring.py`), não são uma constante deste contrato.
 
 O target preparado para a Fase 3 é:
 
@@ -422,7 +424,7 @@ Ele não substitui a futura modelagem supervisionada da Fase 3 e suas limitaçõ
 ### Silver
 
 - modelo canônico integrando batch e replay oficial;
-- `silver.alunos_modelagem` preservando o grão individual dos 2.120.560 alunos oficiais;
+- `silver.alunos_modelagem` preservando o grão individual dos alunos oficiais (quantidade varia por execução);
 - chaves e domínios normalizados;
 - metas associadas ao mesmo grão;
 - `record_id` determinístico;
@@ -435,7 +437,7 @@ Ele não substitui a futura modelagem supervisionada da Fase 3 e suas limitaçõ
 - quarentena operacional;
 - checks sistêmicos aprovados antes da publicação;
 - gate territorial validado com 10.737 registros aprovados e 100% de cobertura;
-- gate de alunos validado com 2.120.560 registros aprovados, 0 rejeitados e 100% de cobertura;
+- gate de alunos validado por execução (contagem de aprovados/rejeitados e cobertura variam — ver output do `06_quality_checks.py`);
 - auditoria persistida;
 - falha não sobrescreve a última Silver aprovada.
 

@@ -7,7 +7,16 @@
 # ]
 # ///
 # MAGIC %md
-# MAGIC # 05 Serving MongoDB
+# MAGIC # 05 · Serving MongoDB
+# MAGIC
+# MAGIC **Pra que serve:** publica os dados da Gold no MongoDB, pra simular um
+# MAGIC cenário de app/API consumindo os indicadores (uma camada de "serving",
+# MAGIC separada da analítica).
+# MAGIC
+# MAGIC **Pré-requisito:** `04_gold.py` já ter rodado, e ter o secret do MongoDB
+# MAGIC configurado (ver abaixo). **Sem o secret, esse notebook não roda** —
+# MAGIC isso é esperado, não precisa rodar se você não for demonstrar essa parte.
+# MAGIC
 # MAGIC Publica a Gold no MongoDB Atlas com **upsert** por município (um documento
 # MAGIC por `ano + id_municipio + rede`), sem apagar a coleção inteira.
 # MAGIC

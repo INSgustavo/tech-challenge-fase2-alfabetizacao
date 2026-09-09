@@ -4,7 +4,21 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 08 - Monitoramento e observabilidade (P3)
+# MAGIC # 08 · Monitoramento e observabilidade
+# MAGIC
+# MAGIC **Pra que serve:** dá uma visão de saúde do pipeline inteiro — quais
+# MAGIC tabelas existem, quantas linhas cada uma tem, se o streaming está
+# MAGIC atrasado, e alertas automáticos se algo sair do esperado.
+# MAGIC
+# MAGIC **Pré-requisito:** rodar depois dos notebooks que você quer monitorar
+# MAGIC (funciona parcialmente mesmo que nem tudo tenha rodado ainda — ele só
+# MAGIC avisa quando uma tabela esperada não existe).
+# MAGIC
+# MAGIC **Use este notebook pra conferir as contagens reais** (quantas linhas
+# MAGIC cada tabela tem na sua execução) — nenhum número de linhas é fixo no
+# MAGIC projeto, sempre confira aqui em vez de confiar em número escrito em
+# MAGIC documentação.
+# MAGIC
 # MAGIC Consolida volume e disponibilidade das tabelas, **latência do streaming**
 # MAGIC (percentis), **sistema de alertas** com thresholds e dashboard consolidado.
 # MAGIC Tudo persistido em `observability.pipeline_metrics`.

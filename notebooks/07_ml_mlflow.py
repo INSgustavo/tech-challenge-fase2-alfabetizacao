@@ -1,6 +1,7 @@
 # Databricks notebook source
 # /// script
 # [tool.databricks.environment]
+# base_environment = "databricks_ai_v5"
 # environment_version = "5"
 # dependencies = [
 #   "scikit-learn",
@@ -8,7 +9,15 @@
 # ]
 # ///
 # MAGIC %md
-# MAGIC # 07 Aplicação em IA (P4) MLflow
+# MAGIC # 07 · Aplicação em IA — MLflow
+# MAGIC
+# MAGIC **Pra que serve:** treina e compara modelos, registrando tudo no MLflow
+# MAGIC (parâmetros, métricas, o modelo em si) pra rastreabilidade. É a POC de
+# MAGIC Machine Learning da Fase 2 — não confundir com a modelagem completa
+# MAGIC no grão de aluno, que é o trabalho da Fase 3.
+# MAGIC
+# MAGIC **Pré-requisito:** `04_gold.py` já ter rodado.
+# MAGIC
 # MAGIC Modelo de regressão que prevê a **taxa de alfabetização** de um
 # MAGIC município a partir de atributos estruturais (ano, UF, rede). Compara
 # MAGIC um **baseline** (média) com um modelo real e registra tudo no MLflow.
@@ -34,6 +43,25 @@ import logging
 
 import mlflow
 import mlflow.sklearn
+
+
+def log_model_compat(model, artifact_path, input_example=None):
+    """
+    mlflow.sklearn.log_model(), tolerante a versões antigas do MLflow que
+    ainda não têm o parâmetro skops_trusted_types (adicionado em versões
+    mais recentes). Tenta com o parâmetro; se a versão instalada no cluster
+    não aceitar, cai pra chamada sem ele.
+    """
+    kwargs = dict(input_example=input_example) if input_example is not None else {}
+    try:
+        return mlflow.sklearn.log_model(
+            model,
+            artifact_path,
+            skops_trusted_types=["sklearn.compose._column_transformer._RemainderColsList"],
+            **kwargs,
+        )
+    except TypeError:
+        return mlflow.sklearn.log_model(model, artifact_path, **kwargs)
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
@@ -128,12 +156,7 @@ with mlflow.start_run(run_name="baseline_media") as run_base:
     input_example = X_train.head(5).copy()
     input_example["ano"] = input_example["ano"].astype("float64")
     input_example["rede"] = input_example["rede"].astype("float64")
-    mlflow.sklearn.log_model(
-        baseline,
-        "model",
-        input_example=input_example,
-        skops_trusted_types=["sklearn.compose._column_transformer._RemainderColsList"],
-    )
+    log_model_compat(baseline, "model", input_example)
     print("Baseline:", metrics_base)
 
 # COMMAND ----------
@@ -162,12 +185,7 @@ with mlflow.start_run(run_name="random_forest") as run_rf:
     input_example_rf = X_train.head(5).copy()
     input_example_rf["ano"] = input_example_rf["ano"].astype("float64")
     input_example_rf["rede"] = input_example_rf["rede"].astype("float64")
-    mlflow.sklearn.log_model(
-        rf,
-        "model",
-        input_example=input_example_rf,
-        skops_trusted_types=["sklearn.compose._column_transformer._RemainderColsList"],
-    )
+    log_model_compat(rf, "model", input_example_rf)
     print("RandomForest:", metrics_rf)
 
 # COMMAND ----------

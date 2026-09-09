@@ -4,16 +4,25 @@
 # environment_version = "5"
 # ///
 # MAGIC %md
-# MAGIC # 01 - Bronze Batch (P2)
-# MAGIC Lê as fontes oficiais preparadas em `data/raw/` e grava em Delta sem transformação de negócio.
+# MAGIC # 01 · Bronze Batch
 # MAGIC
-# MAGIC ## Como subir os dados
-# MAGIC 1. Execute `scripts/gerar_fontes.py`
-# MAGIC 2. Valide os arquivos gerados em `data/raw/`
-# MAGIC 3. Menu lateral: **Catalog → workspace → bronze → raw_files**
-# MAGIC 4. Clique em **Upload to this volume**
-# MAGIC 5. Suba os arquivos gerados para `/Volumes/workspace/bronze/raw_files/`
-# MAGIC 6. Microdados oficiais: `/Volumes/workspace/bronze/raw_files/microdados_inep/DADOS/TS_ALUNO.csv`
+# MAGIC **Pra que serve:** pega os arquivos oficiais que o `00_setup_ambiente`
+# MAGIC já deixou prontos no Volume e grava cada um como uma tabela Delta na
+# MAGIC camada Bronze, sem mudar nada do conteúdo (sem calcular, sem
+# MAGIC interpolar, sem inventar dado).
+# MAGIC
+# MAGIC **Pré-requisito:** já ter rodado `00_setup_ambiente` com sucesso nesse
+# MAGIC workspace (é ele quem publica os arquivos no Volume).
+# MAGIC
+# MAGIC **O que ele cria:** as tabelas `bronze.avaliacao_alfabetizacao`,
+# MAGIC `bronze.avaliacao_alfabetizacao_municipio`, `bronze.uf`,
+# MAGIC `bronze.municipio`, `bronze.meta_brasil`, `bronze.meta_uf`,
+# MAGIC `bronze.meta_municipio` e `bronze.alunos`.
+# MAGIC
+# MAGIC **Sobre a tabela `alunos`:** ela só é criada se o microdado oficial
+# MAGIC (`TS_ALUNO.csv`) já estiver no Volume. Se não estiver, o notebook
+# MAGIC **não quebra** — ele pula essa parte com um aviso e segue rodando as
+# MAGIC outras 7 tabelas normalmente. Isso é esperado, não é bug.
 # MAGIC
 # MAGIC **Regra:** a Bronze não gera, interpola ou simula dados.
 
@@ -298,66 +307,90 @@ for tabela, config in arquivos_batch.items():
 
 # COMMAND ----------
 
+from pathlib import Path
+
 MICRO_ALUNOS = f"{VOLUME_RAW}/microdados_inep/DADOS/TS_ALUNO.csv"
+MICRODADOS_DISPONIVEIS = Path(MICRO_ALUNOS).exists()
 
-schema_alunos_oficial = StructType([
-    StructField("NU_ANO_AVALIACAO", IntegerType(), True),
-    StructField("CO_UF", IntegerType(), True),
-    StructField("SG_UF", StringType(), True),
-    StructField("ID_ALUNO", StringType(), True),
-    StructField("TP_SERIE", StringType(), True),
-    StructField("ID_ESCOLA", StringType(), True),
-    StructField("TP_DEPENDENCIA", IntegerType(), True),
-    StructField("CO_MUNICIPIO", StringType(), True),
-    StructField("NO_MUNICIPIO", StringType(), True),
-    StructField("IN_PRESENCA_LP", IntegerType(), True),
-    StructField("IN_PREENCHIMENTO_LP", IntegerType(), True),
-    StructField("CO_CADERNO_LP", StringType(), True),
-    # Mantidos como string na Bronze para preservar exatamente a representação
-    # textual da fonte oficial. Conversão numérica ocorre na Silver.
-    StructField("VL_PESO_ALUNO_LP", StringType(), True),
-    StructField("VL_PROFICIENCIA_LP", StringType(), True),
-    StructField("IN_ALFABETIZADO", IntegerType(), True),
-])
-
-df_alunos = (
-    spark.read
-        .option("header", True)
-        .option("sep", ";")
-        .option("encoding", "UTF-8")
-        .schema(schema_alunos_oficial)
-        .csv(MICRO_ALUNOS)
-        .withColumn("ingestion_timestamp", current_timestamp())
-        .withColumn("source_file", col("_metadata.file_path"))
-        .withColumn("source_system", lit("INEP oficial - AEEB 2024"))
-        .withColumn("pipeline_run_id", lit(RUN_ID))
-        .withColumn("schema_version", lit(SCHEMA_VERSION))
-)
-
-origem_alunos = df_alunos.count()
-
-(
-    df_alunos.write
-        .format("delta")
-        .mode("overwrite")
-        .option("overwriteSchema", "true")
-        .saveAsTable(f"{CATALOG}.bronze.alunos")
-)
-
-destino_alunos = spark.table(
-    f"{CATALOG}.bronze.alunos"
-).count()
-
-if origem_alunos != destino_alunos:
-    raise RuntimeError(
-        "Falha de reconciliação alunos: "
-        f"origem={origem_alunos}, destino={destino_alunos}"
+if not MICRODADOS_DISPONIVEIS:
+    destino_alunos = None
+    print(
+        f"⚠ TS_ALUNO.csv ainda não foi disponibilizado em {MICRO_ALUNOS}.\n"
+        "  Pulando a ingestão de microdados de alunos por enquanto "
+        "(sem fallback simulado, conforme regra do projeto)."
+    )
+else:
+    # Schema real do arquivo oficial recebido (2º ano EF, avaliação em
+    # organização complementar ao Saeb) - colunas conferidas diretamente
+    # no cabeçalho do TS_ALUNO.csv. Todas mantidas como string na Bronze,
+    # sem conversão de tipo: preserva exatamente a representação textual
+    # da fonte oficial (ex.: CO_RESPOSTA_TEXTO traz valores como "TX"/"NL",
+    # não numéricos). Conversão numérica ocorre na Silver.
+    #
+    # Atenção: este arquivo é da edição 2023 (ID_SAEB=2023), enquanto o
+    # restante do pipeline (metas, indicador municipal) é de 2024 - registrar
+    # essa diferença de ano na documentação/decisões do projeto.
+    colunas_ts_aluno = [
+        "ID_SAEB", "ID_REGIAO", "ID_UF", "ID_MUNICIPIO", "ID_AREA",
+        "ID_ESCOLA", "IN_PUBLICA", "ID_LOCALIZACAO", "ID_TURMA", "ID_SERIE",
+        "ID_ALUNO", "IN_SITUACAO_CENSO", "IN_PREENCHIMENTO_LP",
+        "IN_PREENCHIMENTO_MT", "IN_PRESENCA_LP", "IN_PRESENCA_MT",
+        "ID_CADERNO_LP", "ID_BLOCO_1_LP", "ID_BLOCO_2_LP",
+        "NU_BLOCO_1_ABERTA_LP", "NU_BLOCO_2_ABERTA_LP", "ID_CADERNO_MT",
+        "ID_BLOCO_1_MT", "ID_BLOCO_2_MT", "NU_BLOCO_1_ABERTA_MT",
+        "NU_BLOCO_2_ABERTA_MT", "TX_RESP_BLOCO1_LP", "TX_RESP_BLOCO2_LP",
+        "CO_CONCEITO_Q1_LP", "CO_CONCEITO_Q2_LP", "CO_RESPOSTA_TEXTO",
+        "CO_CONCEITO_SEQUENCIA", "CO_CONCEITO_COESAO", "CO_CONCEITO_PONTUACAO",
+        "CO_CONCEITO_SEGMENTACAO", "CO_TEXTO_GRAFIA", "TX_RESP_BLOCO1_MT",
+        "TX_RESP_BLOCO2_MT", "CO_CONCEITO_Q1_MT", "CO_CONCEITO_Q2_MT",
+        "IN_PROFICIENCIA_LP", "IN_PROFICIENCIA_MT", "IN_AMOSTRA", "ESTRATO",
+        "PESO_ALUNO_LP", "IN_ALFABETIZADO", "PROFICIENCIA_LP",
+        "ERRO_PADRAO_LP", "PROFICIENCIA_LP_SAEB", "ERRO_PADRAO_LP_SAEB",
+        "PESO_ALUNO_MT", "PROFICIENCIA_MT", "ERRO_PADRAO_MT",
+        "PROFICIENCIA_MT_SAEB", "ERRO_PADRAO_MT_SAEB",
+    ]
+    schema_alunos_oficial = StructType(
+        [StructField(nome, StringType(), True) for nome in colunas_ts_aluno]
     )
 
-print(
-    f"✓ alunos: {destino_alunos:,} linhas "
-    "(microdados oficiais INEP)"
-)
+    df_alunos = (
+        spark.read
+            .option("header", True)
+            .option("sep", ";")
+            .option("encoding", "UTF-8")
+            .schema(schema_alunos_oficial)
+            .csv(MICRO_ALUNOS)
+            .withColumn("ingestion_timestamp", current_timestamp())
+            .withColumn("source_file", col("_metadata.file_path"))
+            .withColumn("source_system", lit("INEP oficial - avaliação da alfabetização 2023"))
+            .withColumn("pipeline_run_id", lit(RUN_ID))
+            .withColumn("schema_version", lit(SCHEMA_VERSION))
+    )
+
+    origem_alunos = df_alunos.count()
+
+    (
+        df_alunos.write
+            .format("delta")
+            .mode("overwrite")
+            .option("overwriteSchema", "true")
+            .saveAsTable(f"{CATALOG}.bronze.alunos")
+    )
+
+    destino_alunos = spark.table(
+        f"{CATALOG}.bronze.alunos"
+    ).count()
+
+    if origem_alunos != destino_alunos:
+        raise RuntimeError(
+            "Falha de reconciliação alunos: "
+            f"origem={origem_alunos}, destino={destino_alunos}"
+        )
+
+    print(
+        f"✓ alunos: {destino_alunos:,} linhas "
+        "(microdados oficiais INEP)"
+    )
 
 # COMMAND ----------
 
@@ -381,8 +414,15 @@ tabelas_obrigatorias = [
     "meta_brasil",
     "meta_uf",
     "meta_municipio",
-    "alunos",
 ]
+
+if MICRODADOS_DISPONIVEIS:
+    tabelas_obrigatorias.append("alunos")
+else:
+    print(
+        "⚠ alunos: microdados oficiais ainda pendentes, "
+        "tabela não exigida nesta execução."
+    )
 
 falhas = []
 
@@ -412,7 +452,8 @@ print("\n✓ Bronze Batch concluída com todas as fontes oficiais.")
 
 # COMMAND ----------
 
+alunos_msg = f"{destino_alunos:,} linhas" if destino_alunos is not None else "pendente (microdados não disponibilizados)"
 dbutils.notebook.exit(
-    f"Bronze validada: alunos={destino_alunos:,} linhas, "
+    f"Bronze validada: alunos={alunos_msg}, "
     f"{len(tabelas_obrigatorias)} tabelas obrigatórias confirmadas"
 )
