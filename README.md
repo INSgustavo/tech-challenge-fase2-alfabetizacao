@@ -329,8 +329,9 @@ A Gold é construída exclusivamente a partir da Silver aprovada.
 Os marts que combinam UF e município carregam o campo de nível territorial, evitando interpretar os dois grãos como se fossem equivalentes.
 
 A `gold.base_modelagem_aluno` consome exclusivamente
-`silver.alunos_modelagem_aprovados`. Sua contagem deve ser lida no resultado
-do run do Databricks.
+`silver.alunos_modelagem_aprovados`. No run validado em 09/09/2026, a base
+teve **37.104** registros; a contagem deve continuar sendo lida no resultado
+do run do Databricks quando as fontes forem atualizadas.
 
 O target preparado é `alfabetizado_oficial`. `proficiencia_portugues` e a flag derivada do corte de 743 não são publicadas como features nessa Gold de modelagem, evitando **data leakage**.
 
@@ -585,8 +586,10 @@ particiona":
 |---|---:|---|---|
 | `gold.resumo_uf` | **145** | Não | Volume pequeno no padrão atual. |
 | `gold.indicador_municipio` | **10.584** | Não | O mart é pequeno no padrão atual. |
-| `bronze.alunos` | *variável — veja output da execução* | Não, por decisão consciente | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
-| `gold.base_modelagem_aluno` | *variável — veja output da execução* | Não, por decisão consciente | É consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. |
+| `gold.meta_vs_resultado` | **10.729** | Não | Mart misto pequeno no padrão atual. |
+| `gold.evolucao_temporal` | **10.729** | Não | Mart misto pequeno no padrão atual. |
+| `bronze.alunos` | **37.104** neste run | Não, por decisão consciente | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
+| `gold.base_modelagem_aluno` | **37.104** neste run | Não, por decisão consciente | É consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental. Particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
