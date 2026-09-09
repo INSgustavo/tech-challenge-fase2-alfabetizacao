@@ -310,7 +310,16 @@ for tabela, config in arquivos_batch.items():
 from pathlib import Path
 
 MICRO_ALUNOS = f"{VOLUME_RAW}/microdados_inep/DADOS/TS_ALUNO.csv"
-MICRODADOS_DISPONIVEIS = Path(MICRO_ALUNOS).exists()
+
+try:
+    # Volumes devem ser verificados pela API do Databricks; Path pode não
+    # refletir corretamente a disponibilidade do arquivo no workspace.
+    dbutils.fs.head(MICRO_ALUNOS, 1)
+    MICRODADOS_DISPONIVEIS = True
+except Exception:
+    MICRODADOS_DISPONIVEIS = Path(MICRO_ALUNOS).is_file()
+
+print(f"TS_ALUNO.csv localizado em: {MICRO_ALUNOS} | disponível={MICRODADOS_DISPONIVEIS}")
 
 if not MICRODADOS_DISPONIVEIS:
     raise FileNotFoundError(
