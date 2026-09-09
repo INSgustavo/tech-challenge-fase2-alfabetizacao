@@ -588,8 +588,8 @@ particiona":
 | `gold.indicador_municipio` | **10.584** | Não | O mart é pequeno no padrão atual. |
 | `gold.meta_vs_resultado` | **10.729** | Não | Mart misto pequeno no padrão atual. |
 | `gold.evolucao_temporal` | **10.729** | Não | Mart misto pequeno no padrão atual. |
-| `bronze.alunos` | **37.104** neste run | Não particionada (decisão arquitetural validada) | O Quality Gate aprovou os registros. A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`; particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
-| `gold.base_modelagem_aluno` | **37.104** neste run | Não particionada (decisão arquitetural validada) | O Quality Gate aprovou os registros. A tabela é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental; particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
+| `bronze.alunos` | **37.104** neste run | Não | A Silver lê a tabela inteira a cada execução, sem filtro por `ano` ou `sigla_uf`; particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
+| `gold.base_modelagem_aluno` | **37.104** neste run | Não | A tabela é consumida inteira pelo notebook de ML (`07_ml_mlflow.py`), sem filtro incremental; particionar sem leitura seletiva real não reduz custo e adiciona overhead de metadados no Delta. O volume pode variar conforme a fonte. |
 
 Quando isso deveria ser revisto: se a Fase 3 passar a consultar
 `gold.base_modelagem_aluno` de forma seletiva (ex.: treinar só com um ano, ou
