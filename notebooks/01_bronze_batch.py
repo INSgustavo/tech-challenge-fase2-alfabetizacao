@@ -19,10 +19,10 @@
 # MAGIC `bronze.municipio`, `bronze.meta_brasil`, `bronze.meta_uf`,
 # MAGIC `bronze.meta_municipio` e `bronze.alunos`.
 # MAGIC
-# MAGIC **Sobre a tabela `alunos`:** ela só é criada se o microdado oficial
-# MAGIC (`TS_ALUNO.csv`) já estiver no Volume. Se não estiver, o notebook
-# MAGIC **não quebra** — ele pula essa parte com um aviso e segue rodando as
-# MAGIC outras 7 tabelas normalmente. Isso é esperado, não é bug.
+# MAGIC **Sobre a tabela `alunos`:** o microdado oficial (`TS_ALUNO.csv`) é
+# MAGIC obrigatório para esta versão do pipeline. Se o arquivo não estiver no
+# MAGIC Volume, o notebook falha explicitamente para evitar uma Bronze incompleta
+# MAGIC que produziria tabelas Silver/Gold vazias.
 # MAGIC
 # MAGIC **Regra:** a Bronze não gera, interpola ou simula dados.
 
@@ -313,11 +313,9 @@ MICRO_ALUNOS = f"{VOLUME_RAW}/microdados_inep/DADOS/TS_ALUNO.csv"
 MICRODADOS_DISPONIVEIS = Path(MICRO_ALUNOS).exists()
 
 if not MICRODADOS_DISPONIVEIS:
-    destino_alunos = None
-    print(
-        f"⚠ TS_ALUNO.csv ainda não foi disponibilizado em {MICRO_ALUNOS}.\n"
-        "  Pulando a ingestão de microdados de alunos por enquanto "
-        "(sem fallback simulado, conforme regra do projeto)."
+    raise FileNotFoundError(
+        f"TS_ALUNO.csv não foi disponibilizado em {MICRO_ALUNOS}. "
+        "Execute o 00_setup_ambiente.py antes do 01_bronze_batch.py."
     )
 else:
     # Schema real do arquivo oficial recebido (2º ano EF, avaliação em
@@ -368,6 +366,11 @@ else:
     )
 
     origem_alunos = df_alunos.count()
+
+    if origem_alunos == 0:
+        raise RuntimeError(
+            f"TS_ALUNO.csv foi encontrado, mas não contém registros: {MICRO_ALUNOS}"
+        )
 
     (
         df_alunos.write

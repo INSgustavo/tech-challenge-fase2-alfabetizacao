@@ -712,7 +712,9 @@ A decisão arquitetural deve ser reavaliada com métricas reais de execução, f
 1. Execute `00_setup_ambiente.py`. Ele cria toda a estrutura do catálogo
    (schemas, Volumes, tabelas de observabilidade) e já prepara e publica
    todas as fontes oficiais no Volume, incluindo o `TS_ALUNO.csv`.
-2. Execute `01_bronze_batch.py`.
+2. Execute `01_bronze_batch.py`. A tabela `bronze.alunos` deve ser criada
+      com registros; se `TS_ALUNO.csv` estiver ausente ou vazio, a execução
+      falha explicitamente para evitar uma Bronze incompleta.
 3. Execute `02_bronze_streaming.py`.
 4. Execute `03_silver.py`.
 5. Execute `06_quality_checks.py`.

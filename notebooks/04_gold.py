@@ -305,10 +305,17 @@ if not spark.catalog.tableExists(ALUNOS_APROVADOS):
     )
 
 alunos_aprovados = spark.table(ALUNOS_APROVADOS)
+rows_alunos_aprovados = alunos_aprovados.count()
+
+if rows_alunos_aprovados == 0:
+    raise RuntimeError(
+        f"{ALUNOS_APROVADOS} está vazia. "
+        "A Gold não será publicada até que o Quality Gate aprove registros de alunos."
+    )
 
 print(
     f"Fonte Mart 5: {ALUNOS_APROVADOS} "
-    f"({alunos_aprovados.count():,} registros)"
+    f"({rows_alunos_aprovados:,} registros)"
 )
 
 base_modelagem_aluno = (
